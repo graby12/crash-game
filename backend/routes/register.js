@@ -92,13 +92,14 @@ router.post("/", async (req, res) => {
     }
 
     // ✅ Check OTP
-    const otpRecord = await Otp.findOne({ phoneNumber, otp });
-    if (!otpRecord) {
-      return res.status(400).json({ error: "Invalid OTP" });
-    }
-    if (otpRecord.exp/resAt < new Date()) {
-      return res.status(400).json({ error: "OTP expired" });
-    }
+      const otpRecord = await Otp.findOne({ phoneNumber, otp });
+      if (!otpRecord) {
+        return res.status(400).json({ error: "Invalid OTP" });
+      }
+      if (otpRecord.expiresAt < new Date()) {
+        return res.status(400).json({ error: "OTP expired" });
+      }
+
 
     // ✅ OTP valid → delete it so it can’t be reused
     await Otp.deleteMany({ phoneNumber });
