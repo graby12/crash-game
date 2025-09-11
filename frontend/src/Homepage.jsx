@@ -9,7 +9,7 @@ import CrashGame from "./CrashGame.jsx";
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const SOCKET_URL = "http://localhost:5000";
+const SOCKET_URL = "https://crash-game-d0o3.onrender.com";
 
 const Homepage = () => {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ const Homepage = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.get("http://localhost:5000/api/bet/balance", {
+      const res = await axios.get("https://crash-game-d0o3.onrender.com/api/bet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data?.balance !== undefined) setAvailableBalance(res.data.balance);
@@ -84,7 +84,7 @@ const Homepage = () => {
   // ---------------- FETCH CRASH MULTIPLIER ----------------
   const fetchCrashMultiplier = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/bet/crash');
+      const response = await axios.get('https://crash-game-d0o3.onrender.com/api/bet/crash');
       const data = response.data;
       const point = data?.crashPoint ?? data?.crashMultiplier ?? data?.crash ?? null;
       if (point !== null && point !== undefined) {
@@ -107,7 +107,7 @@ const Homepage = () => {
   // ---------------- FETCH LIVE USERS ----------------
   const fetchLiveUsers = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/live-users");
+      const response = await axios.get("https://crash-game-d0o3.onrender.com/api/live-users");
       if (response.data) setLiveUsers(response.data);
     } catch (err) {
       console.error("Error fetching live users:", err);
@@ -128,7 +128,7 @@ const Homepage = () => {
     setErrorMessage("");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/bet", {
+      const res = await axios.post("https://crash-game-d0o3.onrender.com/api/bet", {
         amount: parseFloat(betAmount),
         autoCashOut: parseFloat(autoCashOut)
       }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
@@ -152,7 +152,7 @@ const Homepage = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.post("http://localhost:5000/api/bet/cashout", {
+      const res = await axios.post("https://crash-game-d0o3.onrender.com/api/bet/cashout", {
         amount: parseFloat(withdrawAmount)
       }, { headers: { Authorization: `Bearer ${token}` } });
       if (res.data) {
@@ -179,7 +179,7 @@ const Homepage = () => {
       if (!token) return;
       const decoded = jwtDecode(token);
       const userId = decoded.userId;
-      const res = await axios.post("http://localhost:5000/api/bet/deposit", {
+      const res = await axios.post("https://crash-game-d0o3.onrender.com/api/bet/deposit", {
         userId,
         amount: parseFloat(depositAmount),
         phoneNumber: depositPhone
