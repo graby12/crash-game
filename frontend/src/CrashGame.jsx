@@ -66,7 +66,7 @@ export default function CrashGame({ showControls = true }) {
   // --- Fetch live users ---
   const fetchLiveUsers = async () => {
     try {
-      const res = await fetch("https://crash-game-d0o3.onrender.com/api/live-users");
+      const res = await fetch("https://crash-game-sse3.onrender.com/api/live-users");
       const data = await res.json();
       setLiveUsers(data);
     } catch (err) {
@@ -77,7 +77,7 @@ export default function CrashGame({ showControls = true }) {
   // --- Start round ---
   const startRound = async () => {
     try {
-      const res = await fetch("https://crash-game-d0o3.onrender.com/api/crash");
+      const res = await fetch("https://crash-game-sse3.onrender.com/api/crash");
       const data = await res.json();
       setCrashPoint(data.crashMultiplier);
       fetchLiveUsers();
@@ -117,7 +117,7 @@ export default function CrashGame({ showControls = true }) {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("https://crash-game-d0o3.onrender.com/api/bet/bet", {
+      const res = await fetch("https://crash-game-sse3.onrender.com/api/bet/bet", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,7 +146,7 @@ export default function CrashGame({ showControls = true }) {
     if (running && betPlaced && !cashedOut) {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://crash-game-d0o3.onrender.com/api/bet/withdraw", {
+        const res = await fetch("https://crash-game-sse3.onrender.com/api/bet/withdraw", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

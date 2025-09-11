@@ -32,7 +32,7 @@ const App = () => {
   // Fetch live users
   const fetchLiveUsers = async () => {
     try {
-      const res = await axios.get("https://crash-game-d0o3.onrender.com/api/live-users");
+      const res = await axios.get("https://crash-game-sse3.onrender.com/api/live-users");
       if (res.data) setLiveUsers(res.data);
     } catch (err) {
       console.error("Error fetching live users:", err);
@@ -52,7 +52,7 @@ const App = () => {
       return;
     }
     try {
-      await axios.post("https://crash-game-d0o3.onrender.com/api/register/send-otp", { phoneNumber });
+      await axios.post("https://crash-game-sse3.onrender.com/api/register/send-otp", { phoneNumber });
       setOtpSent(true);
       setOtpButtonDisabled(true);
       setOtpNoticeVisible(true);
@@ -98,7 +98,7 @@ const App = () => {
     setSuccess("");
     const userData = { phoneNumber, password };
     try {
-      const response = await fetch("https://crash-game-d0o3.onrender.com/api/register/login", {
+      const response = await fetch("https://crash-game-sse3.onrender.com/api/register/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userData),
@@ -144,7 +144,7 @@ const App = () => {
 
     const userData = { username, phoneNumber, password, otp: otp.join("") };
     try {
-      const response = await fetch("https://crash-game-d0o3.onrender.com/api/register", {
+      const response = await fetch("https://crash-game-sse3.onrender.com/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userData),
