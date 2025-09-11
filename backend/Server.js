@@ -7,7 +7,6 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const ngrok = require("ngrok");
 const http = require("http"); // Needed for Socket.IO
 const { Server } = require("socket.io");
 
@@ -252,14 +251,8 @@ io.on("connection", (socket) => {
 
 // ---------- Start ----------
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  if (process.env.NGROK_AUTH_TOKEN) {
-    try {
-      const url = await ngrok.connect({ addr: PORT, authtoken: process.env.NGROK_AUTH_TOKEN });
-      console.log(`🔗 ngrok tunnel running at: ${url}`);
-    } catch (err) {
-      console.error("❌ Failed to start ngrok:", err);
-    }
-  }
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
