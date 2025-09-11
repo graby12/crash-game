@@ -39,7 +39,8 @@ app.set("onlineUsers", onlineUsers);
 // ---------- JWT Auth Middleware ----------
 const authMiddleware = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
-  if (!token) return res.status(401).json({ error: "Authorization token required" });
+  if (!token)
+    return res.status(401).json({ error: "Authorization token required" });
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -112,7 +113,10 @@ app.post("/api/deposit", authMiddleware, async (req, res) => {
     );
 
     const accessToken = tokenResponse.data.access_token;
-    const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:TZ.]/g, "")
+      .slice(0, 14);
     const password = Buffer.from(
       `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
     ).toString("base64");
@@ -150,7 +154,8 @@ app.post("/api/stk-callback", async (req, res) => {
   try {
     const callbackData = req.body;
     const result = callbackData?.Body?.stkCallback;
-    if (!result) return res.status(400).json({ error: "Invalid callback data" });
+    if (!result)
+      return res.status(400).json({ error: "Invalid callback data" });
 
     const { ResultCode, CallbackMetadata } = result;
 
@@ -172,10 +177,17 @@ app.post("/api/stk-callback", async (req, res) => {
       user.balance += amount;
       await user.save();
 
-      io.emit("balanceUpdated", { userId: user._id.toString(), newBalance: user.balance, amount });
+      io.emit("balanceUpdated", {
+        userId: user._id.toString(),
+        newBalance: user.balance,
+        amount,
+      });
       if (onlineUsers.has(user._id.toString())) {
         const socketId = onlineUsers.get(user._id.toString());
-        io.to(socketId).emit(`balanceUpdated-${user._id.toString()}`, { newBalance: user.balance, amount });
+        io.to(socketId).emit(`balanceUpdated-${user._id.toString()}`, {
+          newBalance: user.balance,
+          amount,
+        });
       }
 
       console.log(`✅ Deposit of ${amount} successful for ${phoneNumber}`);
@@ -209,12 +221,22 @@ app.get("/api/live-users", async (req, res) => {
     const liveUsers = users.map((user) => {
       const didBet = Math.random() > 0.5;
       if (!didBet) {
-        return { user: user.username, amount: "-", multiplier: "-", profit: "-" };
+        return {
+          user: user.username,
+          amount: "-",
+          multiplier: "-",
+          profit: "-",
+        };
       }
       const amount = Math.floor(Math.random() * (10000 - 300 + 1)) + 300;
       const multiplier = (Math.random() * (5 - 1.1) + 1.1).toFixed(2);
       const profit = (amount * multiplier).toFixed(2);
-      return { user: user.username, amount, multiplier: `${multiplier}x`, profit };
+      return {
+        user: user.username,
+        amount,
+        multiplier: `${multiplier}x`,
+        profit,
+      };
     });
 
     res.status(200).json(liveUsers);
@@ -255,4 +277,3 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
