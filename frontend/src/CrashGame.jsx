@@ -254,11 +254,12 @@ export default function CrashGame({ showControls = true }) {
   }, [running, crashPoint, useAutoCashout, autoCashout, cashedOut, betPlaced, betAmount, history]);
 
   // --- Auto start ---
-  useEffect(() => {
-    if (isLoggedIn && !running && countdown === null) {
-      triggerCountdown();
-    }
-  }, [isLoggedIn]);
+
+      useEffect(() => {
+        if (!running && countdown === null) {
+          triggerCountdown();
+        }
+      }, [running, countdown]);
 
   // --- Chart data ---
   const data = {
