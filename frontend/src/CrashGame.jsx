@@ -73,7 +73,6 @@ export default function CrashGame({ showControls = true }) {
       console.error("Error fetching live users:", err);
     }
   };
-
   // --- Start round ---
   const startRound = async () => {
     try {
