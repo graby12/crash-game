@@ -1,3 +1,6 @@
+// server.js
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
@@ -7,10 +10,18 @@ const axios = require("axios");
 const ngrok = require("ngrok");
 const http = require("http"); // Needed for Socket.IO
 const { Server } = require("socket.io");
-require("dotenv").config();
+
+// Models & routes
+const Register = require("./models/Register");
+const Bet = require("./models/Bet");
+const registerRoutes = require("./routes/register");
+const gamesRoutes = require("./routes/games"); // ✅ updated
+const generateCrashMultiplier = require("./routes/random");
 
 const app = express();
-const server = http.createServer(app); // Attach server for Socket.IO
+const server = http.createServer(app);
+
+// ---------- Socket.IO ----------
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -18,18 +29,15 @@ const io = new Server(server, {
   },
 });
 
-// ---------------- Middleware ----------------
+const onlineUsers = new Map();
+
+// ---------- Middlewares ----------
 app.use(cors());
 app.use(bodyParser.json());
+app.set("io", io);
+app.set("onlineUsers", onlineUsers);
 
-// ---------------- Import Models & Routes ----------------
-const Register = require("./models/Register");
-const Bet = require("./models/Bet");
-const registerRoutes = require("./routes/register");
-const generateCrashMultiplier = require("./routes/random");
-const gamesRoutes = require("./routes/games"); // Games routes
-
-// ---------------- JWT Auth Middleware ----------------
+// ---------- JWT Auth Middleware ----------
 const authMiddleware = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
   if (!token) return res.status(401).json({ error: "Authorization token required" });
@@ -43,7 +51,7 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ---------------- Connect MongoDB ----------------
+// ---------- Connect MongoDB ----------
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB"))
@@ -52,25 +60,22 @@ mongoose
     process.exit(1);
   });
 
-// ---------------- Routes ----------------
+// ---------- Mount Routes ----------
 app.use("/api/register", registerRoutes);
-app.use("/bet/place-bet", gamesRoutes); // Mounted games routes
+app.use("/api/bet", gamesRoutes); // ✅ clean RESTful bet routes
 
-// Make io available in routes
-app.set("io", io);
-
-// ---------------- Crash Multiplier ----------------
+// ---------- Crash Multiplier Endpoint ----------
 app.get("/api/crash", (req, res) => {
   try {
     const crashMultiplier = generateCrashMultiplier();
-    res.json({ crashMultiplier: crashMultiplier.toFixed(2) });
+    res.json({ crashMultiplier: crashMultiplier });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to generate crash multiplier" });
   }
 });
 
-// ---------------- HELPER: Phone Normalization ----------------
+// ---------- HELPER: Phone Normalization ----------
 function formatPhoneForMpesa(phone) {
   phone = phone.toString().trim();
   if (phone.startsWith("07")) return "254" + phone.substring(1);
@@ -86,7 +91,7 @@ function formatPhoneForDB(phone) {
   return phone;
 }
 
-// ---------------- STK PUSH DEPOSIT ----------------
+// ---------- STK PUSH DEPOSIT ----------
 app.post("/api/deposit", authMiddleware, async (req, res) => {
   try {
     const { phoneNumber, amount } = req.body;
@@ -141,7 +146,7 @@ app.post("/api/deposit", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- STK CALLBACK ----------------
+// ---------- STK CALLBACK ----------
 app.post("/api/stk-callback", async (req, res) => {
   try {
     const callbackData = req.body;
@@ -149,6 +154,7 @@ app.post("/api/stk-callback", async (req, res) => {
     if (!result) return res.status(400).json({ error: "Invalid callback data" });
 
     const { ResultCode, CallbackMetadata } = result;
+
     if (ResultCode === 0) {
       const items = CallbackMetadata?.Item;
       const amountItem = items.find((i) => i.Name === "Amount");
@@ -159,25 +165,33 @@ app.post("/api/stk-callback", async (req, res) => {
       phoneNumber = formatPhoneForDB(phoneNumber);
 
       const user = await Register.findOne({ phoneNumber });
-      if (!user) return res.status(404).json({ error: "User not found" });
+      if (!user) {
+        console.warn("STK callback: user not found for phone", phoneNumber);
+        return res.status(404).json({ error: "User not found" });
+      }
 
       user.balance += amount;
       await user.save();
 
-      io.emit("balanceUpdated", { userId: user._id, newBalance: user.balance });
+      io.emit("balanceUpdated", { userId: user._id.toString(), newBalance: user.balance, amount });
+      if (onlineUsers.has(user._id.toString())) {
+        const socketId = onlineUsers.get(user._id.toString());
+        io.to(socketId).emit(`balanceUpdated-${user._id.toString()}`, { newBalance: user.balance, amount });
+      }
+
       console.log(`✅ Deposit of ${amount} successful for ${phoneNumber}`);
     } else {
       console.log(`❌ STK Push failed or cancelled. ResultCode: ${ResultCode}`);
     }
 
-    res.status(200).json({ message: "Callback received" });
+    return res.status(200).json({ message: "Callback received" });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Callback processing failed" });
+    console.error("STK callback processing failed:", err.message);
+    return res.status(500).json({ error: "Callback processing failed" });
   }
 });
 
-// ---------------- BALANCE CHECK ----------------
+// ---------- BALANCE CHECK ----------
 app.get("/api/balance", authMiddleware, async (req, res) => {
   try {
     const user = await Register.findById(req.userId);
@@ -188,15 +202,22 @@ app.get("/api/balance", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Live Users ----------------
+// ---------- Live Users ----------
 app.get("/api/live-users", async (req, res) => {
   try {
-    const users = await Register.find().sort({ createdAt: -1 }).limit(5);
-    const liveUsers = users.map((user) => ({
-      user: user.username,
-      amount: user.balance,
-      profit: Math.floor(Math.random() * 100),
-    }));
+    const users = await Register.find().sort({ createdAt: -1 }).limit(10);
+
+    const liveUsers = users.map((user) => {
+      const didBet = Math.random() > 0.5;
+      if (!didBet) {
+        return { user: user.username, amount: "-", multiplier: "-", profit: "-" };
+      }
+      const amount = Math.floor(Math.random() * (10000 - 300 + 1)) + 300;
+      const multiplier = (Math.random() * (5 - 1.1) + 1.1).toFixed(2);
+      const profit = (amount * multiplier).toFixed(2);
+      return { user: user.username, amount, multiplier: `${multiplier}x`, profit };
+    });
+
     res.status(200).json(liveUsers);
   } catch (err) {
     console.error(err);
@@ -204,29 +225,41 @@ app.get("/api/live-users", async (req, res) => {
   }
 });
 
-// ---------------- Test Route ----------------
+// ---------- Test Route ----------
 app.get("/", (req, res) => res.send("Backend server is running!"));
 
-// ---------------- WebSocket Handling ----------------
+// ---------- Socket.IO ----------
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.id);
+  console.log("🟢 User connected (socket):", socket.id);
+
+  socket.on("registerUser", (userId) => {
+    if (!userId) return;
+    onlineUsers.set(userId, socket.id);
+    console.log(`📡 Registered user ${userId} -> socket ${socket.id}`);
+  });
 
   socket.on("disconnect", () => {
-    console.log("🔴 User disconnected:", socket.id);
+    console.log("🔴 Socket disconnected:", socket.id);
+    for (const [userId, sockId] of onlineUsers.entries()) {
+      if (sockId === socket.id) {
+        onlineUsers.delete(userId);
+        console.log(`🗑️ Removed ${userId} from onlineUsers`);
+        break;
+      }
+    }
   });
 });
 
-// ---------------- Start Server with ngrok ----------------
+// ---------- Start ----------
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  try {
-    const url = await ngrok.connect({
-      addr: PORT,
-      authtoken: process.env.NGROK_AUTH_TOKEN,
-    });
-    console.log(`🔗 ngrok tunnel running at: ${url}`);
-  } catch (err) {a
-    console.error("❌ Failed to start ngrok:", err);
+  if (process.env.NGROK_AUTH_TOKEN) {
+    try {
+      const url = await ngrok.connect({ addr: PORT, authtoken: process.env.NGROK_AUTH_TOKEN });
+      console.log(`🔗 ngrok tunnel running at: ${url}`);
+    } catch (err) {
+      console.error("❌ Failed to start ngrok:", err);
+    }
   }
 });

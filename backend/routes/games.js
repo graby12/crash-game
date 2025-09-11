@@ -6,33 +6,36 @@ const Register = require("../models/Register");
 
 const router = express.Router();
 
-// ---------------- AUTH MIDDLEWARE ----------------
 function auth(req, res, next) {
   const token = req.header("Authorization");
   if (!token)
     return res.status(401).json({ error: "No token, authorization denied" });
 
   try {
-    const decoded = jwt.verify(
-      token.replace("Bearer ", ""),
-      process.env.JWT_SECRET
-    );
+    const rawToken = token.replace("Bearer ", "");
+    console.log("🔑 Incoming token:", rawToken.substring(0, 20) + "...");
+
+    const decoded = jwt.verify(rawToken, process.env.JWT_SECRET);
+    console.log("✅ Decoded payload:", decoded);
+
     req.user = decoded;
     next();
   } catch (err) {
+    console.error("❌ JWT verification failed:", err.message);
     return res.status(400).json({ error: "Invalid token" });
   }
 }
 
+
 // ---------------- PLACE BET ----------------
 router.post("/bet", auth, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, autoCashOut } = req.body;
 
-    if (!amount || amount <= 0) {
+    if (!amount || amount < 300) {
       return res
         .status(400)
-        .json({ error: "Amount is required and must be greater than 0" });
+        .json({ error: "Amount must be at least 300 to place a bet" });
     }
 
     const user = await Register.findById(req.user.userId);
@@ -42,112 +45,107 @@ router.post("/bet", auth, async (req, res) => {
       return res.status(400).json({ error: "Insufficient balance" });
     }
 
-    // Deduct user balance
+    // Deduct stake
     user.balance -= amount;
     await user.save();
 
-    // Place bet without requiring autoCashOut
-    const bet = new Bet({ userId: user._id, amount, status: "pending" });
+    // Save bet
+    const bet = new Bet({
+      userId: user._id,
+      amount,
+      autoCashOut: autoCashOut && autoCashOut >= 2 ? autoCashOut : null, // optional
+      status: "pending",
+    });
     await bet.save();
 
-    res.json({ message: "Bet placed", betId: bet._id, balance: user.balance });
+    res.json({
+      message: "Bet placed successfully",
+      betId: bet._id,
+      newBalance: user.balance,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ---------------- SIMULATE CRASH MULTIPLIER ----------------
-router.get("/crash", async (req, res) => {
-  try {
-    const crashPoint = (Math.random() * 10).toFixed(2);
-    res.json({ crashPoint });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Place bet error:", err.message);
+    res.status(500).json({ error: "Failed to place bet" });
   }
 });
 
 // ---------------- CASHOUT ----------------
-router.post("/cashout", auth, async (req, res) => {
+router.post("/bet/cashout", auth, async (req, res) => {
   try {
-    const { betId } = req.body;
-    const bet = await Bet.findById(betId).populate("userId");
+    const { betId, crashMultiplier } = req.body;
 
+    const bet = await Bet.findById(betId).populate("userId");
     if (!bet || bet.status !== "pending") {
-      return res.status(400).json({ error: "Invalid bet" });
+      return res.status(400).json({ error: "Invalid or already settled bet" });
     }
 
-    // Simulate crash
-    const crashMultiplier = parseFloat((Math.random() * 10).toFixed(2));
-
-    // Default autoCashOut = 2x
-    const autoCashOut = 2;
-    let winnings = 0;
+    const autoCashOut = bet.autoCashOut || 2; // default to 2x if not set
+    let profit = 0;
 
     if (crashMultiplier >= autoCashOut) {
-      winnings = bet.amount * autoCashOut;
+      profit = bet.amount * autoCashOut;
       bet.status = "won";
-      bet.userId.balance += winnings;
-      await bet.userId.save();
+      bet.userId.balance += profit;
     } else {
+      profit = -bet.amount;
       bet.status = "lost";
     }
 
     bet.multiplier = crashMultiplier;
-    bet.autoCashOut = autoCashOut;
+    bet.profit = profit;
+    await bet.userId.save();
     await bet.save();
 
     res.json({
       message: bet.status === "won" ? "You won!" : "You lost!",
-      winnings,
+      profit,
       balance: bet.userId.balance,
       crashMultiplier,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Cashout error:", err.message);
+    res.status(500).json({ error: "Cashout failed" });
   }
 });
 
 // ---------------- HELPER: Phone Normalization ----------------
 function formatPhoneForMpesa(phone) {
-  // Always send to Safaricom in 2547XXXXXXX format
   phone = phone.toString().trim();
-  if (phone.startsWith("07")) {
-    return "254" + phone.substring(1); // 07XXXXXXXX -> 2547XXXXXXXX
+  if (phone.startsWith("07") || phone.startsWith("01")) {
+    return "254" + phone.substring(1);
   } else if (phone.startsWith("+254")) {
-    return phone.replace("+", ""); // +2547XXXXXXXX -> 2547XXXXXXXX
+    return phone.replace("+", "");
   } else if (phone.startsWith("254")) {
-    return phone; // already in correct format
+    return phone;
   }
   return phone;
 }
 
 function formatPhoneForDB(phone) {
-  // Always store & match users in DB with 07XXXXXXXX format
   phone = phone.toString().trim();
   if (phone.startsWith("254")) {
-    return "0" + phone.substring(3); // 2547XXXXXXXX -> 07XXXXXXXX
+    return "0" + phone.substring(3);
   } else if (phone.startsWith("+254")) {
-    return "0" + phone.substring(4); // +2547XXXXXXXX -> 07XXXXXXXX
+    return "0" + phone.substring(4);
   }
   return phone;
 }
 
 // ---------------- STK PUSH DEPOSIT ----------------
-router.post("/deposit", async (req, res) => {
+router.post("/deposit", auth, async (req, res) => {
   try {
-    const { userId, phoneNumber, amount } = req.body;
-    if (!phoneNumber || !amount)
-      return res.status(400).json({ error: "Phone & amount required" });
+    const { phoneNumber, amount } = req.body;
+    if (!phoneNumber || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Phone & valid amount required" });
+    }
 
-    const user = await Register.findById(userId);
+    const user = await Register.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // ✅ Normalize phone for MPESA
     const phone = formatPhoneForMpesa(phoneNumber);
 
     // Get MPESA Access Token
-    const auth = Buffer.from(
+    const authHeader = Buffer.from(
       `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
     ).toString("base64");
 
@@ -155,7 +153,7 @@ router.post("/deposit", async (req, res) => {
       process.env.MPESA_ENV === "sandbox"
         ? "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
         : "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-      { headers: { Authorization: `Basic ${auth}` } }
+      { headers: { Authorization: `Basic ${authHeader}` } }
     );
 
     const accessToken = tokenResponse.data.access_token;
@@ -179,9 +177,9 @@ router.post("/deposit", async (req, res) => {
         Timestamp: timestamp,
         TransactionType: "CustomerPayBillOnline",
         Amount: amount,
-        PartyA: phone, // ✅ formatted for MPESA
+        PartyA: phone,
         PartyB: process.env.MPESA_SHORTCODE,
-        PhoneNumber: phone, // ✅ formatted for MPESA
+        PhoneNumber: phone,
         CallBackURL: process.env.MPESA_CALLBACK_URL,
         AccountReference: "MONEY_GAME",
         TransactionDesc: "Deposit to Money Game",
@@ -191,7 +189,7 @@ router.post("/deposit", async (req, res) => {
 
     res.json({ message: "STK Push sent", data: stkResponse.data });
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("❌ STK push error:", err.response?.data || err.message);
     res.status(500).json({ error: "STK Push failed" });
   }
 });
@@ -199,23 +197,19 @@ router.post("/deposit", async (req, res) => {
 // ---------------- STK CALLBACK ----------------
 router.post("/stk-callback", async (req, res) => {
   try {
-    const callbackData = req.body;
-
-    const result = callbackData?.Body?.stkCallback;
+    const result = req.body?.Body?.stkCallback;
     if (!result)
       return res.status(400).json({ error: "Invalid callback data" });
 
     const { ResultCode, CallbackMetadata } = result;
 
     if (ResultCode === 0) {
-      const items = CallbackMetadata?.Item;
+      const items = CallbackMetadata?.Item || [];
       const amountItem = items.find((i) => i.Name === "Amount");
       const phoneItem = items.find((i) => i.Name === "PhoneNumber");
 
       const amount = amountItem?.Value || 0;
       let phoneNumber = phoneItem?.Value?.toString();
-
-      // ✅ Normalize back to DB format (07XXXXXXXX)
       phoneNumber = formatPhoneForDB(phoneNumber);
 
       const user = await Register.findOne({ phoneNumber });
@@ -224,17 +218,17 @@ router.post("/stk-callback", async (req, res) => {
       user.balance += amount;
       await user.save();
 
-      console.log(`Deposit of ${amount} successful for ${phoneNumber}`);
+      console.log(`✅ Deposit of ${amount} successful for ${phoneNumber}`);
     } else {
-      console.log(`STK Push failed or cancelled. ResultCode: ${ResultCode}`);
+      console.log(`❌ STK Push failed or cancelled. ResultCode: ${ResultCode}`);
     }
 
     res.status(200).json({ message: "Callback received" });
   } catch (err) {
-    console.error(err.message);
+    console.error("❌ Callback error:", err.message);
     res.status(500).json({ error: "Callback processing failed" });
   }
-}); 
+});
 
 // ---------------- BALANCE CHECK ----------------
 router.get("/balance", auth, async (req, res) => {
@@ -244,6 +238,7 @@ router.get("/balance", auth, async (req, res) => {
 
     res.json({ balance: user.balance });
   } catch (err) {
+    console.error("❌ Balance check error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

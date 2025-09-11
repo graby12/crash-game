@@ -1,21 +1,26 @@
 // random.js
+require("dotenv").config();
 
-// Function to generate the crash multiplier based on the given logic
 function generateCrashMultiplier() {
-  const randomChance = Math.random(); // Get a random number between 0 and 1
+  let r = Math.random();
 
-  // 70% chance of crashing early (Below 2x)
-  if (randomChance <= 0.7) {
-    return (Math.random() * 1.5) + 1; // Random multiplier between 1x and 2x
+  // Avoid division by zero
+  if (r === 0) r = 0.000001;
+
+  // Pareto-style heavy-tail distribution
+  let crashPoint = 1 / r;
+
+  // Read max multiplier from env or fallback to 200
+  const MAX_MULTIPLIER = process.env.MAX_MULTIPLIER
+    ? parseFloat(process.env.MAX_MULTIPLIER)
+    : 200;
+
+  if (crashPoint > MAX_MULTIPLIER) {
+    crashPoint = MAX_MULTIPLIER;
   }
 
-  // 10% chance of crashing randomly between 7x and 15x
-  if (randomChance <= 0.8) {
-    return (Math.random() * 8) + 7; // Random multiplier between 7x and 15x
-  }
-
-  // 20% chance of crashing randomly between 2x and 4x
-  return (Math.random() * 2) + 2; // Random multiplier between 2x and 4x
+  // Round to 2 decimal places
+  return parseFloat(crashPoint.toFixed(2));
 }
 
 module.exports = generateCrashMultiplier;

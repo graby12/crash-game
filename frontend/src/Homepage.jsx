@@ -1,25 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import jwtDecode from 'jwt-decode';
 import io from 'socket.io-client';
+import CrashGame from "./CrashGame.jsx";
 
 // Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const SOCKET_URL = "http://localhost:5000"; // replace with ngrok URL in production
+const SOCKET_URL = "http://localhost:5000";
 
-const HomePage = () => {
+const Homepage = () => {
   const navigate = useNavigate();
 
   // ---------------- STATES ----------------
@@ -32,18 +24,12 @@ const HomePage = () => {
     { user: 'New29055', amount: 100, profit: 5 },
     { user: 'Kkipchumba', amount: 40, profit: 3 },
   ]);
-
   const [availableBalance, setAvailableBalance] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  const [multiplierData, setMultiplierData] = useState([1.5, 2.0, 2.5, 3.0, 3.67, 4.1]);
-
-  // Withdraw states
+  const [multiplierData, setMultiplierData] = useState([]);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-
-  // Deposit states
   const [isDepositPopupOpen, setIsDepositPopupOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPhone, setDepositPhone] = useState('');
@@ -54,12 +40,10 @@ const HomePage = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.get("http://localhost:5000/api/balance", {
+      const res = await axios.get("http://localhost:5000/api/bet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.data?.balance !== undefined) {
-        setAvailableBalance(res.data.balance);
-      }
+      if (res.data?.balance !== undefined) setAvailableBalance(res.data.balance);
     } catch (err) {
       console.error("Error fetching user balance:", err);
     }
@@ -73,21 +57,25 @@ const HomePage = () => {
     socket.on("connect", () => console.log("🟢 Connected to WebSocket"));
     socket.on("disconnect", () => console.log("🔴 Disconnected from WebSocket"));
 
-    // Live STK push updates
     socket.on("depositSuccess", (data) => {
-      const decoded = jwtDecode(localStorage.getItem("token"));
-      if (data.userId === decoded.userId) {
-        setAvailableBalance(data.balance);
-        setSuccessMessage(`Deposit of ${data.amount} successful!`);
-      }
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const decoded = jwtDecode(token);
+        if (data.userId === decoded.userId) {
+          setAvailableBalance(data.balance);
+          setSuccessMessage(`Deposit of ${data.amount} successful!`);
+        }
+      } catch {}
     });
 
-    // Live balance updates (bets or other)
     socket.on("balanceUpdated", (data) => {
-      const decoded = jwtDecode(localStorage.getItem("token"));
-      if (data.userId === decoded.userId) {
-        setAvailableBalance(data.newBalance);
-      }
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const decoded = jwtDecode(token);
+        if (data.userId === decoded.userId) setAvailableBalance(data.newBalance);
+      } catch {}
     });
 
     return () => socket.disconnect();
@@ -98,10 +86,13 @@ const HomePage = () => {
     try {
       const response = await axios.get('http://localhost:5000/api/bet/crash');
       const data = response.data;
-      setMultiplierData(prevData => {
-        const newData = [...prevData, parseFloat(data.crashPoint)];
-        return newData.slice(-20);
-      });
+      const point = data?.crashPoint ?? data?.crashMultiplier ?? data?.crash ?? null;
+      if (point !== null && point !== undefined) {
+        setMultiplierData(prevData => {
+          const newData = [...prevData, parseFloat(point)];
+          return newData.slice(-20);
+        });
+      }
     } catch (error) {
       console.error('Error fetching crash multiplier:', error);
     }
@@ -131,21 +122,21 @@ const HomePage = () => {
 
   // ----------------- BET FUNCTION -----------------
   const handleBet = async () => {
+    if (!betAmount || isNaN(parseFloat(betAmount))) { setErrorMessage("Enter a valid bet amount"); return; }
     if (parseFloat(betAmount) < 10) { setErrorMessage("Minimum staking is KES 10"); return; }
     if (parseFloat(betAmount) > availableBalance) { setErrorMessage("Insufficient balance"); return; }
     setErrorMessage("");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/bet/place-bet", {
+      const res = await axios.post("http://localhost:5000/api/bet", {
         amount: parseFloat(betAmount),
         autoCashOut: parseFloat(autoCashOut)
       }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
 
       if (res.data) {
-        setAvailableBalance(res.data.balance);
-        setSuccessMessage("Bet placed successfully! Redirecting to crash game...");
+        setAvailableBalance(res.data.newBalance);
+        setSuccessMessage("Bet placed successfully!");
         await fetchUserBalance();
-        setTimeout(() => navigate("/crash-game"), 2000);
       }
     } catch (error) {
       console.error("Bet API error:", error);
@@ -158,14 +149,12 @@ const HomePage = () => {
   const confirmWithdraw = async () => {
     if (parseFloat(withdrawAmount) < 300) { setErrorMessage("Minimum withdrawal is KES 300"); return; }
     setErrorMessage("");
-
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.post("http://localhost:5000/api/bet/withdraw", {
+      const res = await axios.post("http://localhost:5000/api/bet/cashout", {
         amount: parseFloat(withdrawAmount)
       }, { headers: { Authorization: `Bearer ${token}` } });
-
       if (res.data) {
         setAvailableBalance(res.data.balance);
         setSuccessMessage("Withdrawal successful!");
@@ -183,22 +172,18 @@ const HomePage = () => {
   const confirmDeposit = async () => {
     if (!depositPhone.match(/^(?:2547\d{8}|07\d{8})$/)) { setErrorMessage("Invalid phone number format. Use 07XXXXXXXX or 2547XXXXXXXX"); return; }
     if (parseFloat(depositAmount) < 50) { setErrorMessage("Minimum deposit is KES 50"); return; }
-
     setErrorMessage('');
     setIsDepositProcessing(true);
-
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
       const decoded = jwtDecode(token);
       const userId = decoded.userId;
-
-      const res = await axios.post("http://localhost:5000/api/deposit", {
+      const res = await axios.post("http://localhost:5000/api/bet/deposit", {
         userId,
         amount: parseFloat(depositAmount),
         phoneNumber: depositPhone
       }, { headers: { Authorization: `Bearer ${token}` } });
-
       if (res.data) {
         setSuccessMessage("STK Push sent! Check your phone to complete payment.");
         setIsDepositPopupOpen(false);
@@ -218,149 +203,99 @@ const HomePage = () => {
   const closeDepositPopup = () => setIsDepositPopupOpen(false);
   const handleLogOut = () => navigate('/');
 
-  // ----------------- GRAPH DATA -----------------
-  const graphLabels = multiplierData.map((_, i) => `${i * 5}s`);
-  const graphData = {
-    labels: graphLabels,
-    datasets: [{
-      label: 'Crash Game Multiplier',
-      data: multiplierData,
-      borderColor: 'rgb(255, 99, 132)',
-      tension: 0.1,
-      fill: false
-    }]
-  };
-
-  // ----------------- AUTO-CASHOUT EFFECT -----------------
-  useEffect(() => {
-    if (!betAmount || !autoCashOut) return;
-    const lastMultiplier = multiplierData[multiplierData.length - 1];
-    if (lastMultiplier >= autoCashOut) {
-      setSuccessMessage(`Auto-cashed out at ${autoCashOut}x!`);
-      setAvailableBalance(prev => prev + parseFloat(betAmount) * parseFloat(autoCashOut));
-      setBetAmount('');
-    }
-  }, [multiplierData]);
-
   // ----------------- RENDER -----------------
   return (
-    <div className="bg-gray-900 text-white min-h-screen">
-      {/* Header */}
-      <header className="flex items-center p-4 bg-gray-800">
-        <div className="text-xl font-bold w-1/3">MONEY GRAPH</div>
-        <div className="flex space-x-4 text-white w-1/3 justify-center">
-          <a href="#" className="hover:text-orange-500" onClick={handleWithdraw}>WITHDRAW</a>
-          <a href="#" className="hover:text-orange-500" onClick={handleDeposit}>DEPOSIT</a>
+    <div className="bg-gray-900 text-white min-h-screen flex flex-col">
+      {/* Header - fixed */}
+      <header className="flex flex-col sm:flex-row items-center p-4 bg-gray-800 fixed top-0 w-full z-50">
+        <div className="text-lg sm:text-xl font-bold flex-1 text-center sm:text-left mb-2 sm:mb-0">MONEY GRAPH</div>
+        <div className="flex flex-col sm:flex-row sm:space-x-4 flex-1 justify-center text-sm sm:text-base mb-2 sm:mb-0">
+          <button onClick={handleWithdraw} className="hover:text-orange-500">WITHDRAW</button>
+          <button onClick={handleDeposit} className="hover:text-orange-500">DEPOSIT</button>
           <a href="#" className="hover:text-orange-500">NEED ASSISTANCE?</a>
         </div>
-        <div className="flex items-center space-x-4 text-white w-1/3 justify-end">
-          <span className="bg-gray-600 text-white px-4 py-2 rounded-lg">KSH {availableBalance}</span>
-          <span>KKK5249201</span>
-          <button className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-500" onClick={handleLogOut}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
+          <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">KSH {availableBalance}</span>
+          <span className="hidden sm:block">KKK5249201</span>
+          <button onClick={handleLogOut} className="bg-red-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg hover:bg-red-500 mt-2 sm:mt-0">
             LOG OUT
           </button>
         </div>
       </header>
 
-      {/* Main */}
-      <main className="flex flex-col items-center space-y-8 p-8">
-        {/* Chart + Bet + Live Users */}
-        <div className="flex flex-col sm:flex-row justify-between w-full max-w-7xl p-6 space-x-6">
-          {/* Chart */}
-          <div className="w-full sm:w-1/3 bg-gray-800 p-6 rounded-lg shadow-md mb-6 sm:mb-0">
-            <h2 className="text-2xl text-center mb-4">Crash Game Multiplier</h2>
-            <Line data={graphData} />
-          </div>
-
-          {/* Bet Panel */}
-          <div className="w-full sm:w-1/3 bg-gray-700 p-6 rounded-lg shadow-md mb-6 sm:mb-0">
-            <div className="space-y-4">
-              <div className="flex space-x-4">
-                <div className="flex flex-col space-y-2 w-1/2">
-                  <label>Bet Amount (KES)</label>
-                  <input type="number" className="p-2 rounded bg-gray-800 text-white"
-                    value={betAmount} onChange={(e) => setBetAmount(e.target.value)} placeholder="Enter bet amount" />
-                  {errorMessage && <p className="text-red-500 text-sm mt-2">{errorMessage}</p>}
-                  {successMessage && <p className="text-green-500 text-sm mt-2">{successMessage}</p>}
-                </div>
-                <div className="flex flex-col space-y-2 w-1/2">
-                  <label>Auto Cashout (X)</label>
-                  <input type="number" className="p-2 rounded bg-gray-800 text-white" value={autoCashOut} onChange={(e) => setAutoCashOut(e.target.value)} />
-                </div>
-              </div>
-              <button className="bg-blue-600 text-white py-2 px-4 rounded w-full mt-4" onClick={handleBet}>BET</button>
-            </div>
+      {/* Main scrollable content */}
+      <main className="flex-1 overflow-y-auto pt-28 pb-12 px-4 sm:px-8">
+        <div className="flex flex-col lg:flex-row justify-between w-full max-w-7xl mx-auto space-y-6 lg:space-y-0 lg:space-x-6">
+          {/* Crash Game */}
+          <div className="w-full lg:w-2/3 bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-xl sm:text-2xl text-center mb-4">Crash Game Multiplier</h2>
+            <CrashGame showControls={true}/>
           </div>
 
           {/* Live Users */}
-          <div className="w-full sm:w-1/3 bg-gray-700 p-6 rounded-lg shadow-md mb-6 sm:mb-0">
-            <h2 className="text-xl font-semibold text-center mb-4">Live Users</h2>
+          <div className="w-full lg:w-1/3 bg-gray-700 p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-lg sm:text-xl font-semibold text-center mb-4">Live Users</h2>
             <div className="space-y-2">
-              <div className="flex justify-between font-semibold">
+              <div className="flex justify-between font-semibold text-sm sm:text-base">
                 <div>User</div>
                 <div>Amount</div>
                 <div>Profit</div>
               </div>
               {liveUsers.map((user, index) => (
-                <div key={index} className="flex justify-between text-sm">
+                <div key={index} className="flex justify-between text-xs sm:text-sm">
                   <div>{user.user}</div>
-                  <div>{user.amount}</div>
-                  <div>{user.profit}</div>
+                  <div className={user.amount === '-' ? "text-red-500" : ""}>
+                    {user.amount}
+                  </div>
+                  <div className={user.profit === '-' ? "text-red-500" : "text-green-500"}>
+                    {user.profit}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <footer className="flex flex-col items-center w-full p-4 bg-gray-800">
-          <div className="text-sm">
-            For assistance, contact us at{' '}
-            <a href="tel:0743999333" className="text-orange-500">0743999333</a>
-          </div>
-          <div className="mt-4 w-full bg-orange-500 text-black py-4 text-center">
-            <p className="text-white">SPECIAL HAPPY HOUR DEAL!</p>
-            <p className="text-white">PATA 10% YA LOSSES ZAKO ALL WEEK BETWEEN 8AM - 10AM</p>
-          </div>
-        </footer>
       </main>
+
+      {/* Footer - not fixed anymore */}
+      <footer className="bg-orange-500 text-center py-2 sm:py-4 mt-6">
+        <p className="text-white text-sm sm:text-base">SPECIAL HAPPY HOUR DEAL!</p>
+        <p className="text-white text-xs sm:text-sm">PATA 10% YA LOSSES ZAKO ALL WEEK BETWEEN 8AM - 10AM</p>
+      </footer>
 
       {/* Withdraw Popup */}
       {isPopupOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-gray-800 p-6 rounded-lg w-1/3 space-y-4">
-            <h3 className="text-2xl font-semibold text-center text-white">Withholding Tax Notice</h3>
-            <p className="text-white">
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg w-11/12 sm:w-2/3 md:w-1/3 space-y-4">
+            <h3 className="text-xl sm:text-2xl font-semibold text-center">Withholding Tax Notice</h3>
+            <p>
               As provided for by the Income Tax Act, Cap 472, all gaming companies are required to
               withhold winnings at a rate of 20%. Pakakumi will deduct and remit 20% of all winnings to KRA.
             </p>
             <div className="space-y-2">
-              <div className="flex justify-between text-white">
-                <span>Amount (KES)</span>
-                <input type="number" className="p-2 rounded bg-gray-800 text-white w-full mt-2 border border-gray-500"
-                  value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Enter withdrawal amount" />
-              </div>
+              <input type="number" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Enter withdrawal amount" />
               {withdrawAmount < 300 && withdrawAmount !== '' && (
-                <p className="text-red-500 text-sm mt-2">Minimum withdrawal is KES 300</p>
+                <p className="text-red-500 text-sm">Minimum withdrawal is KES 300</p>
               )}
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-white">
+            <div className="space-y-2 text-sm sm:text-base">
+              <div className="flex justify-between">
                 <span>Withholding Tax</span>
-                <span>{-(withdrawAmount * 0.2)}</span>
+                <span>{withdrawAmount ? (-(withdrawAmount * 0.2)).toFixed(2) : '-0'}</span>
               </div>
-              <div className="flex justify-between text-white">
+              <div className="flex justify-between">
                 <span>Withdraw Fee</span>
                 <span>-16</span>
               </div>
-              <div className="flex justify-between font-bold text-white">
+              <div className="flex justify-between font-bold">
                 <span>Disbursed Amount</span>
-                <span>{withdrawAmount - withdrawAmount * 0.2 - 16}</span>
+                <span>{withdrawAmount ? (withdrawAmount - withdrawAmount * 0.2 - 16).toFixed(2) : '-0'}</span>
               </div>
             </div>
-            <div className="flex justify-between mt-4">
-              <button onClick={closePopup} className="bg-red-600 text-white py-2 px-4 rounded-lg w-1/2">CLOSE</button>
-              <button onClick={confirmWithdraw} className="bg-blue-600 text-white py-2 px-4 rounded-lg w-1/2">WITHDRAW</button>
+            <div className="flex justify-between mt-4 space-x-2">
+              <button onClick={closePopup} className="bg-red-600 py-2 px-4 rounded-lg w-1/2">CLOSE</button>
+              <button onClick={confirmWithdraw} className="bg-blue-600 py-2 px-4 rounded-lg w-1/2">WITHDRAW</button>
             </div>
           </div>
         </div>
@@ -368,50 +303,31 @@ const HomePage = () => {
 
       {/* Deposit Popup */}
       {isDepositPopupOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-gray-800 p-6 rounded-lg w-1/3 space-y-4">
-            <h3 className="text-2xl font-semibold text-center text-white">Deposit Funds</h3>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg w-11/12 sm:w-2/3 md:w-1/3 space-y-4">
+            <h3 className="text-xl sm:text-2xl font-semibold text-center">Deposit Funds</h3>
             <div className="space-y-4">
-              <div className="flex flex-col text-white">
+              <div className="flex flex-col">
                 <label>Phone Number</label>
-                <input
-                  type="text"
-                  className="p-2 rounded bg-gray-800 text-white w-full mt-2 border border-gray-500"
-                  value={depositPhone}
-                  onChange={(e) => setDepositPhone(e.target.value)}
-                  placeholder="Enter phone number (07XXXXXXXX)"
-                />
+                <input type="text" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                  value={depositPhone} onChange={(e) => setDepositPhone(e.target.value)} placeholder="Enter phone number (07XXXXXXXX)" />
               </div>
-              <div className="flex flex-col text-white">
+              <div className="flex flex-col">
                 <label>Amount (KES)</label>
-                <input
-                  type="number"
-                  className="p-2 rounded bg-gray-800 text-white w-full mt-2 border border-gray-500"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="Enter deposit amount"
-                />
+                <input type="number" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                  value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Enter deposit amount" />
                 {depositAmount < 50 && depositAmount !== '' && (
-                  <p className="text-red-500 text-sm mt-2">Minimum deposit is KES 50</p>
+                  <p className="text-red-500 text-sm">Minimum deposit is KES 50</p>
                 )}
               </div>
             </div>
-            {errorMessage && <p className="text-red-500 text-sm mt-2">{errorMessage}</p>}
-            {successMessage && <p className="text-green-500 text-sm mt-2">{successMessage}</p>}
-            <div className="flex justify-between mt-4">
-              <button
-                onClick={closeDepositPopup}
-                className="bg-red-600 text-white py-2 px-4 rounded-lg w-1/2"
-                disabled={isDepositProcessing}
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={confirmDeposit}
-                className={`py-2 px-4 rounded-lg w-1/2 ${isDepositProcessing ? 'bg-gray-600' : 'bg-blue-600 text-white'}`}
-                disabled={isDepositProcessing}
-              >
-                {isDepositProcessing ? 'Processing...' : 'DEPOSIT'}
+            {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
+            {successMessage && <p className="text-green-500 text-sm">{successMessage}</p>}
+            <div className="flex justify-between mt-4 space-x-2">
+              <button onClick={closeDepositPopup} className="bg-red-600 py-2 px-4 rounded-lg w-1/2">CLOSE</button>
+              <button onClick={confirmDeposit} disabled={isDepositProcessing}
+                className={`bg-blue-600 py-2 px-4 rounded-lg w-1/2 ${isDepositProcessing ? "opacity-50 cursor-not-allowed" : ""}`}>
+                {isDepositProcessing ? "Processing..." : "DEPOSIT"}
               </button>
             </div>
           </div>
@@ -421,4 +337,4 @@ const HomePage = () => {
   );
 };
 
-export default HomePage;
+export default Homepage;
