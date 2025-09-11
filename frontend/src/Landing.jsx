@@ -488,39 +488,67 @@ const TransactionMessages = () => {
       maximumFractionDigits: 2,
     });
 
-  const randomTime = () => {
-    const hours = Math.floor(Math.random() * 12) + 1;
-    const minutes = String(Math.floor(Math.random() * 60)).padStart(2, "0");
-    const ampm = Math.random() > 0.5 ? "AM" : "PM";
-    return `${hours}:${minutes} ${ampm}`;
+ // ✅ Random transaction ID
+const randomId = () => Math.floor(100000 + Math.random() * 900000);
+
+// ✅ Format date (today or tomorrow, never yesterday)
+const getFormattedDate = () => {
+  const now = new Date();
+  if (Math.random() < 0.5) {
+    return now.toLocaleDateString("en-GB"); // today
+  } else {
+    const tomorrow = new Date();
+    tomorrow.setDate(now.getDate() + 1);
+    return tomorrow.toLocaleDateString("en-GB"); // tomorrow
+  }
+};
+
+// ✅ Generate realistic time (1–2 hours ago, never future or yesterday)
+const randomTime = () => {
+  const now = new Date();
+  const pastHours = 1 + Math.floor(Math.random() * 2); // pick 1 or 2
+  now.setHours(now.getHours() - pastHours);
+
+  return now.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+useEffect(() => {
+  const showOne = () => {
+    // generate amount
+    const amountVal = randomAmount();
+
+    // ensure balance > amount: add a random extra (100..50,000)
+    const extra = Math.random() * (50000 - 100) + 100;
+    const balanceVal = amountVal + extra;
+
+    const amountStr = fmt(amountVal);
+    const balanceStr = fmt(balanceVal);
+
+    // ✅ updated with real date & time
+    const msg = `${randomId()} Confirmed. You have received Ksh${amountStr} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
+
+    // set new message and run fade in/out cycle
+    setMessage(msg);
+    setVisible(false);
+
+    // clear any previous timers
+    if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+    if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+
+    // small delay so the transition can animate (fade in)
+    fadeInTimer.current = setTimeout(() => setVisible(true), 100);
+
+    // hold visible for ~5s then fade out
+    fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
   };
 
-  useEffect(() => {
-    const showOne = () => {
-      // generate amount
-      const amountVal = randomAmount();
-      // ensure balance > amount: add a random extra (100..50,000)
-      const extra = Math.random() * (50000 - 100) + 100;
-      const balanceVal = amountVal + extra;
+  showOne();
+}, []);
 
-      const amountStr = fmt(amountVal);
-      const balanceStr = fmt(balanceVal);
-
-      const msg = `${randomId()} Confirmed. You have received Ksh${amountStr} from MONEY GRAPH on 9/9/25 at ${randomTime()}. New M-PESA balance is Ksh${balanceStr}. Separate personal and business funds through Pochi la Biashara on *334#`;
-
-      // set new message and run fade in/out cycle
-      setMessage(msg);
-      setVisible(false);
-
-      // clear any previous timers
-      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
-      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
-
-      // small delay so the transition can animate (fade in)
-      fadeInTimer.current = setTimeout(() => setVisible(true), 100);
-      // hold visible for ~5s then fade out
-      fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
-    };
 
     // show immediately, then every 7s
     showOne();
