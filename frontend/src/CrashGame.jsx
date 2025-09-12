@@ -31,7 +31,7 @@ export default function CrashGame({ showControls = true }) {
   const [running, setRunning] = useState(false);
   const [cashedOut, setCashedOut] = useState(false);
   const [history, setHistory] = useState([]);
-  const [betAmount, setBetAmount] = useState(10);
+  const [betAmount, setBetAmount] = useState("");
   const [useAutoCashout, setUseAutoCashout] = useState(false);
   const [autoCashout, setAutoCashout] = useState(2);
   const [result, setResult] = useState(null);
@@ -106,10 +106,11 @@ export default function CrashGame({ showControls = true }) {
       return;
     }
 
-      if (betAmount < 10) {
+      if (!betAmount || betAmount < 10) {
         setBetError("❌ Minimum bet is 10");
         return;
-   }
+    }
+
 
 
     if (betAmount > availableBalance) {
@@ -347,17 +348,16 @@ export default function CrashGame({ showControls = true }) {
 
               <div className="flex items-end gap-4 mx-auto flex-wrap sm:flex-nowrap justify-center">
                 <div className="flex flex-col">
-                        <label className="block text-xs">Bet Amount</label>
-                        <input
-                          type="number"
-                          value={betAmount}
-                          onChange={(e) => setBetAmount(Number(e.target.value))}
-                          className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
-                          min={10}
-                        />
-                        <p className="text-[10px] text-gray-400">Min: 10</p>
-                      </div>
-
+                      <label className="block text-xs">Bet Amount</label>
+                      <input
+                        type="number"
+                        value={betAmount}
+                        onChange={(e) => setBetAmount(e.target.value)}
+                        className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
+                        placeholder="Enter amount"
+                        min={10}
+                      />
+                    </div>
 
                 <div className="flex flex-col">
                   <label className="block text-xs">Auto Cash Out (x)</label>
@@ -415,14 +415,14 @@ export default function CrashGame({ showControls = true }) {
               </label>
             </div>
 
-            <div className="flex flex-col items-center text-center">
+                    <div className="flex flex-col items-center text-center mt-2 min-h-[20px]">
               {betError && (
-                <p className="text-red-400 text-xs font-bold mt-1 animate-fadeout">
+                <p className="text-red-400 text-xs font-bold animate-fadeout">
                   {betError}
                 </p>
               )}
               {generalError && (
-                <p className="text-red-400 text-xs font-bold mt-1 animate-fadeout">
+                <p className="text-red-400 text-xs font-bold animate-fadeout">
                   {generalError}
                 </p>
               )}

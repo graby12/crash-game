@@ -239,12 +239,13 @@ const Homepage = () => {
           </button>
 
           {/* Assistance + Balance centered */}
-          <div className="flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
-            <p className="text-xs text-gray-300">Need Assistance?</p>
-            <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
-              KSH {availableBalance}
-            </span>
-          </div>
+          {/* Assistance + Balance centered */}
+        <div className="flex flex-row items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
+          <p className="text-xs text-gray-300">Need Assistance?</p>
+          <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
+            KSH {availableBalance}
+          </span>
+        </div>
         </div>
         {/* Mobile Drawer */}
           {menuOpen && (
@@ -406,13 +407,10 @@ const TransactionMessages = () => {
   const fmt = (n) =>
     Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const getFormattedDate = () => {
-    const now = new Date();
-    if (Math.random() < 0.5) return now.toLocaleDateString("en-GB");
-    const tomorrow = new Date();
-    tomorrow.setDate(now.getDate() + 1);
-    return tomorrow.toLocaleDateString("en-GB");
-  };
+    const getFormattedDate = () => {
+      const now = new Date();
+      return now.toLocaleDateString("en-GB"); // always today
+    };
 
   const randomTime = () => {
     const now = new Date();

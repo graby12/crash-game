@@ -449,13 +449,10 @@ const TransactionMessages = () => {
   const fmt = (n) =>
     Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const getFormattedDate = () => {
-    const now = new Date();
-    if (Math.random() < 0.5) return now.toLocaleDateString("en-GB");
-    const tomorrow = new Date();
-    tomorrow.setDate(now.getDate() + 1);
-    return tomorrow.toLocaleDateString("en-GB");
-  };
+    const getFormattedDate = () => {
+      const now = new Date();
+      return now.toLocaleDateString("en-GB"); // always today
+    };
 
   const randomTime = () => {
     const now = new Date();
