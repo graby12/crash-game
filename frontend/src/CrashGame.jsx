@@ -82,6 +82,8 @@ export default function CrashGame({ showControls = true }) {
       setCrashPoint(data.crashMultiplier);
       fetchLiveUsers();
 
+      // stop countdown when round starts
+      setCountdown(null);
       setMultiplier(0);
       setMultiplierData([0]);
       setTimeData([0]);
@@ -163,7 +165,7 @@ export default function CrashGame({ showControls = true }) {
         setCashedOut(true);
         setRunning(false);
         setHistory([`${multiplier.toFixed(2)}x`, ...history.slice(0, 6)]);
-        triggerCountdown();
+        // do NOT trigger countdown here
       } catch (err) {
         console.error("Error withdrawing:", err);
         setGeneralError("❌ Withdraw failed: " + err.message);
@@ -220,6 +222,7 @@ export default function CrashGame({ showControls = true }) {
           setShowCrash(crashPoint.toFixed(2));
           setHistory([`${crashPoint.toFixed(2)}x`, ...history.slice(0, 6)]);
 
+          // wait 5s showing crash, then restart countdown
           setTimeout(() => {
             setShowCrash(null);
             triggerCountdown();
@@ -237,7 +240,7 @@ export default function CrashGame({ showControls = true }) {
           setCashedOut(true);
           setRunning(false);
           setHistory([`${autoCashout.toFixed(2)}x`, ...history.slice(0, 6)]);
-          triggerCountdown();
+          // restart countdown only after crash ends, not here
           return;
         }
 
@@ -252,10 +255,10 @@ export default function CrashGame({ showControls = true }) {
 
   // --- Auto start ---
   useEffect(() => {
-    if (!running && countdown === null) {
+    if (!running && countdown === null && !showCrash) {
       triggerCountdown();
     }
-  }, [running, countdown]);
+  }, [running, countdown, showCrash]);
 
   // --- Chart data ---
   const data = {
