@@ -73,6 +73,7 @@ export default function CrashGame({ showControls = true }) {
       console.error("Error fetching live users:", err);
     }
   };
+
   // --- Start round ---
   const startRound = async () => {
     try {
@@ -177,7 +178,7 @@ export default function CrashGame({ showControls = true }) {
     if (countdown !== null) {
       if (countdown <= 0) {
         setCountdown(null);
-        setWaitingForStart(false); // hide "bet placed" message
+        setWaitingForStart(false);
         startRound();
         return;
       }
@@ -196,13 +197,11 @@ export default function CrashGame({ showControls = true }) {
     if (running && crashPoint) {
       const animate = (timestamp) => {
         if (!startTime) startTime = timestamp;
-        const elapsed = (timestamp - startTime) / 1000; // seconds
+        const elapsed = (timestamp - startTime) / 1000;
 
-        // --- Pure exponential growth (Pakakumi style) ---
-        const growthRate = 0.18; // controls how fast multiplier rises
+        const growthRate = 0.18;
         const current = Math.exp(growthRate * elapsed);
 
-        // --- Crash Point Reached ---
         if (current >= crashPoint) {
           setMultiplier(crashPoint);
           setMultiplierData((prev) => [...prev, crashPoint]);
@@ -228,12 +227,10 @@ export default function CrashGame({ showControls = true }) {
           return;
         }
 
-        // --- Normal Growth Update ---
         setMultiplier(current);
         setMultiplierData((prev) => [...prev, current]);
         setTimeData((prev) => [...prev, elapsed]);
 
-        // --- Auto Cashout Check ---
         if (betPlaced && useAutoCashout && current >= autoCashout && !cashedOut) {
           const win = (betAmount * autoCashout).toFixed(2);
           setResult({ type: "win", amount: win });
@@ -254,12 +251,11 @@ export default function CrashGame({ showControls = true }) {
   }, [running, crashPoint, useAutoCashout, autoCashout, cashedOut, betPlaced, betAmount, history]);
 
   // --- Auto start ---
-
-      useEffect(() => {
-        if (!running && countdown === null) {
-          triggerCountdown();
-        }
-      }, [running, countdown]);
+  useEffect(() => {
+    if (!running && countdown === null) {
+      triggerCountdown();
+    }
+  }, [running, countdown]);
 
   // --- Chart data ---
   const data = {
@@ -269,7 +265,7 @@ export default function CrashGame({ showControls = true }) {
         data: timeData.map((t, i) => ({ x: t, y: multiplierData[i] })),
         borderColor: showCrash ? "#FF0000" : "#FF5733",
         borderWidth: 2,
-        tension: 0.25, // smoother exponential curve
+        tension: 0.25,
         pointRadius: 0,
       },
     ],
@@ -284,23 +280,18 @@ export default function CrashGame({ showControls = true }) {
       x: {
         type: "linear",
         title: { display: true, text: "Time (s)" },
-        ticks: {
-          color: "white",
-          stepSize: 3, // 0s, 3s, 6s...
-        },
+        ticks: { color: "white", stepSize: 3 },
         grid: { color: "rgba(255,255,255,0.15)" },
         min: 0,
-        suggestedMax: 12, // keeps curve centered
+        suggestedMax: 12,
       },
       y: {
-        min: 1, // always start at 1x
+        min: 1,
         ticks: {
           color: "white",
-          // Show only whole numbers: 2x, 3x, 4x…
           callback: (value) => (value % 1 === 0 ? value + "x" : ""),
         },
         grid: { color: "rgba(255,255,255,0.15)" },
-        // Dynamic scaling — expands as multiplier grows
         suggestedMax: Math.ceil(multiplier) + 1,
       },
     },
@@ -334,7 +325,7 @@ export default function CrashGame({ showControls = true }) {
       {/* Result */}
       {result && (
         <div
-          className={`text-2xl sm:text-3xl md:text-4xl font-extrabold fadeout ${
+          className={`text-2xl sm:text-3xl md:text-4xl font-extrabold animate-fadeout ${
             result.type === "win" ? "text-green-400" : "text-red-400"
           }`}
         >
@@ -348,38 +339,27 @@ export default function CrashGame({ showControls = true }) {
       {showControls &&
         (isLoggedIn ? (
           <div className="w-full flex flex-col items-center gap-2">
-            {/* Controls Row */}
-            {/* Desktop: keep left spacer, center group, right toggle.
-                Mobile: center group stacks but remains grouped. */}
             <div className="flex items-end justify-between w-full max-w-3xl">
-              {/* Left spacer (keeps middle group centered) */}
               <div className="w-24 hidden sm:block" />
 
-              {/* Middle group: Bet Amount + Auto Cash + Place Bet */}
               <div className="flex items-end gap-4 mx-auto flex-wrap sm:flex-nowrap justify-center">
-                {/* Bet Amount */}
                 <div className="flex flex-col">
                   <label className="block text-xs">Bet Amount</label>
                   <input
                     type="number"
                     value={betAmount}
-                    onChange={(e) =>
-                      setBetAmount(Math.max(100, Number(e.target.value)))
-                    }
+                    onChange={(e) => setBetAmount(Math.max(100, Number(e.target.value)))}
                     className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
                   />
                 </div>
 
-                {/* Auto Cash Out */}
                 <div className="flex flex-col">
                   <label className="block text-xs">Auto Cash Out (x)</label>
                   <input
                     type="number"
                     min={2}
                     value={autoCashout}
-                    onChange={(e) =>
-                      setAutoCashout(Math.max(2, Number(e.target.value)))
-                    }
+                    onChange={(e) => setAutoCashout(Math.max(2, Number(e.target.value)))}
                     disabled={!useAutoCashout}
                     className={`border p-1 rounded w-24 sm:w-24 md:w-28 text-center ${
                       useAutoCashout ? "text-black" : "bg-gray-300 text-gray-500"
@@ -387,7 +367,6 @@ export default function CrashGame({ showControls = true }) {
                   />
                 </div>
 
-                {/* Place Bet / Withdraw */}
                 <div className="flex flex-col">
                   <button
                     className={`px-4 py-2 rounded-lg text-white font-semibold text-sm ${
@@ -398,9 +377,7 @@ export default function CrashGame({ showControls = true }) {
                         : "bg-blue-600 hover:bg-blue-700"
                     }`}
                     onClick={
-                      running && betPlaced && !cashedOut
-                        ? handleWithdraw
-                        : handlePlaceBet
+                      running && betPlaced && !cashedOut ? handleWithdraw : handlePlaceBet
                     }
                     disabled={waitingForStart || (running && cashedOut)}
                   >
@@ -413,7 +390,6 @@ export default function CrashGame({ showControls = true }) {
                 </div>
               </div>
 
-              {/* Auto Cashout Toggle pinned right */}
               <label className="flex flex-col items-center cursor-pointer select-none">
                 <span className="text-xs mb-1">Auto</span>
                 <div className="relative">
@@ -433,27 +409,28 @@ export default function CrashGame({ showControls = true }) {
               </label>
             </div>
 
-            {/* Messages BELOW row */}
             <div className="flex flex-col items-center text-center">
               {betError && (
-                <p className="text-red-400 text-xs font-bold mt-1 error-msg">
+                <p className="text-red-400 text-xs font-bold mt-1 animate-fadeout">
                   {betError}
                 </p>
               )}
               {generalError && (
-                <p className="text-red-400 text-xs font-bold mt-1 error-msg">
+                <p className="text-red-400 text-xs font-bold mt-1 animate-fadeout">
                   {generalError}
                 </p>
               )}
               {waitingForStart && (
-                <p className="text-green-400 text-sm font-bold fadeout">
+                <p className="text-green-400 text-sm font-bold animate-fadeout">
                   ✅ Bet placed, waiting for game to start...
                 </p>
               )}
             </div>
           </div>
         ) : (
-          <p className="text-gray-400 italic text-sm">Log in to place bets and cash out.</p>
+          <p className="text-gray-400 italic text-sm">
+            Log in to place bets and cash out.
+          </p>
         ))}
 
       {/* History */}
@@ -462,7 +439,9 @@ export default function CrashGame({ showControls = true }) {
           <span
             key={i}
             className={`px-2 py-1 rounded text-xs font-bold ${
-              parseFloat(h) < 2 ? "bg-red-200 text-red-700" : "bg-green-200 text-green-700"
+              parseFloat(h) < 2
+                ? "bg-red-200 text-red-700"
+                : "bg-green-200 text-green-700"
             }`}
           >
             {h}
@@ -480,7 +459,9 @@ export default function CrashGame({ showControls = true }) {
               className="flex justify-between text-xs border-b border-gray-700 py-1 min-w-[300px]"
             >
               <span className="truncate max-w-[80px]">{u.user}</span>
-              <span className="truncate max-w-[80px]">{u.amount === "-" ? "-" : `KES ${u.amount}`}</span>
+              <span className="truncate max-w-[80px]">
+                {u.amount === "-" ? "-" : `KES ${u.amount}`}
+              </span>
               <span className="truncate max-w-[60px]">{u.multiplier}</span>
               <span
                 className={
@@ -495,26 +476,6 @@ export default function CrashGame({ showControls = true }) {
           ))}
         </div>
       </div>
-
-      <style jsx>{`
-        .fadeout {
-          animation: fadeOut 3s forwards;
-        }
-        @keyframes fadeOut {
-          0% {
-            opacity: 1;
-          }
-          80% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-          }
-        }
-        .error-msg {
-          animation: fadeOut 3s forwards;
-        }
-      `}</style>
     </div>
   );
 }

@@ -29,6 +29,11 @@ const App = () => {
   // Live users
   const [liveUsers, setLiveUsers] = useState([]);
 
+  // Player stats
+  const [playersOnline, setPlayersOnline] = useState(440);
+  const [playersRegistered, setPlayersRegistered] = useState(2340);
+  const [playersPlaying, setPlayersPlaying] = useState(250);
+
   // Fetch live users
   const fetchLiveUsers = async () => {
     try {
@@ -43,6 +48,26 @@ const App = () => {
     fetchLiveUsers();
     const interval = setInterval(fetchLiveUsers, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Update players stats
+  useEffect(() => {
+    // Online + Playing → update every 10s
+    const interval = setInterval(() => {
+      setPlayersOnline(Math.floor(Math.random() * (800 - 400 + 1)) + 400);
+      setPlayersPlaying(Math.floor(Math.random() * (400 - 200 + 1)) + 200);
+    }, 10000);
+
+    // Registered → increase every 2h
+    const twoHours = 2 * 60 * 60 * 1000;
+    const regInterval = setInterval(() => {
+      setPlayersRegistered((prev) => prev + Math.floor(Math.random() * (8 - 3 + 1)) + 3);
+    }, twoHours);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(regInterval);
+    };
   }, []);
 
   // Send OTP
@@ -187,16 +212,16 @@ const App = () => {
     <div className="bg-black text-white min-h-screen flex flex-col">
       {/* Header */}
       <header className="flex flex-col sm:flex-row items-center sm:justify-between p-4 border-b border-gray-700 gap-3">
-        <h1 className="text-2xl sm:text-3xl font-bold w-full sm:w-auto text-center sm:text-left">MONEY GRAPH</h1>
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold">MONEY GRAPH</h1>
+        <div className="flex gap-3">
           <button
-            className="bg-orange-500 text-black px-4 py-2 rounded-lg hover:bg-orange-400 w-full sm:w-auto"
+            className="bg-orange-500 text-black px-4 py-2 rounded-lg hover:bg-orange-400"
             onClick={() => handleOpenModal(true)}
           >
             LOGIN
           </button>
           <button
-            className="bg-orange-500 text-black px-4 py-2 rounded-lg hover:bg-orange-400 w-full sm:w-auto"
+            className="bg-orange-500 text-black px-4 py-2 rounded-lg hover:bg-orange-400"
             onClick={() => handleOpenModal(false)}
           >
             REGISTER
@@ -207,8 +232,7 @@ const App = () => {
       {/* Auth Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-700 bg-opacity-75 flex justify-center items-center z-50 p-4">
-          <div className="relative bg-gray-800 p-6 rounded-lg w-full max-w-md sm:max-w-lg">
-            {/* Close button */}
+          <div className="relative bg-gray-800 p-6 rounded-lg w-full max-w-md">
             <button
               onClick={handleCloseModal}
               className="absolute right-3 top-3 text-white/80 hover:text-white"
@@ -222,12 +246,12 @@ const App = () => {
 
             {/* Username for Register */}
             {!isLogin && (
-              <div className="mt-2 text-sm">
+              <div className="mb-2">
                 <label className="block text-gray-300 mb-1 text-sm">Username</label>
                 <input
                   type="text"
                   placeholder="Enter username"
-                  className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                  className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
@@ -235,19 +259,19 @@ const App = () => {
             )}
 
             {/* Phone + OTP */}
-            <div className="mt-3 text-sm">
+            <div className="mb-2">
               <label className="block text-gray-300 mb-1 text-sm">Phone number</label>
-              <div className={`flex ${!isLogin ? "gap-2" : ""} flex-col sm:flex-row`}>
+              <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="Enter phone number"
-                  className="flex-1 px-3 py-2 mb-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                  className="flex-1 px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                 />
                 {!isLogin && (
                   <button
-                    className={`px-2 py-2 mb-2 rounded-md text-xs ${otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"} text-white w-full sm:w-auto`}
+                    className={`px-2 py-2 rounded-md text-xs ${otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"} text-white`}
                     onClick={handleSendOtp}
                     disabled={otpButtonDisabled}
                   >
@@ -258,16 +282,14 @@ const App = () => {
 
               {!isLogin && otpSent && (
                 <div className="mt-2">
-                  {otpNoticeVisible && (
-                    <p className="text-green-400 text-xs mb-2">OTP sent</p>
-                  )}
+                  {otpNoticeVisible && <p className="text-green-400 text-xs mb-2">OTP sent</p>}
                   <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
                     {otp.map((digit, index) => (
                       <input
                         key={index}
                         type="text"
                         maxLength="1"
-                        className="w-12 h-12 sm:w-10 sm:h-10 text-center text-lg rounded bg-gray-700 text-white"
+                        className="w-10 h-10 text-center text-lg rounded bg-gray-700 text-white"
                         value={digit}
                         onChange={(e) => handleOtpChange(e, index)}
                         onKeyDown={(e) => handleOtpKeyDown(e, index)}
@@ -280,12 +302,12 @@ const App = () => {
             </div>
 
             {/* Password */}
-            <div className="mt-3 text-sm">
+            <div className="mb-2">
               <label className="block text-gray-300 mb-1 text-sm">Password</label>
               <input
                 type="password"
                 placeholder="Enter password"
-                className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -293,12 +315,12 @@ const App = () => {
 
             {/* Confirm Password */}
             {!isLogin && (
-              <div className="mt-2 text-sm">
+              <div className="mb-2">
                 <label className="block text-gray-300 mb-1 text-sm">Re-enter Password</label>
                 <input
                   type="password"
                   placeholder="Re-enter password"
-                  className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                  className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
@@ -326,31 +348,6 @@ const App = () => {
 
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             {success && <p className="text-green-500 text-sm mt-2">{success}</p>}
-
-            {/* Toggle */}
-            <p className="text-center text-xs text-white mt-3 cursor-pointer">
-              {isLogin ? (
-                <>
-                  Don’t have an account?{" "}
-                  <span
-                    className="text-orange-400 hover:underline"
-                    onClick={() => setIsLogin(false)}
-                  >
-                    Sign up now
-                  </span>
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
-                  <span
-                    className="text-orange-400 hover:underline"
-                    onClick={() => setIsLogin(true)}
-                  >
-                    Log in
-                  </span>
-                </>
-              )}
-            </p>
           </div>
         </div>
       )}
@@ -359,7 +356,9 @@ const App = () => {
       <main className="flex flex-col sm:flex-row flex-1 p-4 gap-6">
         {/* Left */}
         <div className="flex flex-col items-center w-full sm:w-1/2 mb-6 sm:mb-0">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-center sm:text-left">Join now and multiply Asap</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-center sm:text-left">
+            Join now and multiply Asap
+          </h2>
           <div className="w-full min-h-[260px]">
             <CrashGame showControls={false} />
           </div>
@@ -367,70 +366,22 @@ const App = () => {
 
         {/* Right */}
         <div className="w-full sm:w-1/2 flex flex-col">
-          <div className="text-center mb-4">
-            <p className="text-lg">Login or Register to start playing.</p>
-          </div>
-
-          {/* Transaction messages */}
           <TransactionMessages />
-
-          <div className="overflow-x-auto mb-6">
-            <div className="overflow-y-auto h-72">
-              <table className="w-full table-auto min-w-[600px] mb-6">
-                <thead>
-                  <tr className="bg-gray-800 text-left">
-                    <th className="px-4 py-2">User</th>
-                    <th className="px-4 py-2">Amount</th>
-                    <th className="px-4 py-2">Profit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {liveUsers.length > 0 ? (
-                    liveUsers.map((player, index) => (
-                      <tr key={index} className="border-b border-gray-700">
-                        <td className="px-4 py-2">{player.user}</td>
-                        <td
-                          className={
-                            player.amount === "-"
-                              ? "px-4 py-2 text-red-500"
-                              : "px-4 py-2 text-white"
-                          }
-                        >
-                          {player.amount === "-" ? "-" : `Ksh ${player.amount}`}
-                        </td>
-                        <td
-                          className={
-                            player.profit === "-"
-                              ? "px-4 py-2 text-red-500 font-semibold"
-                              : "px-4 py-2 text-green-500 font-semibold"
-                          }
-                        >
-                          {player.profit === "-" ? "-" : `Ksh ${player.profit}`}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="3" className="text-center py-4 text-gray-400">
-                        No live users yet
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           {/* Stats */}
           <div className="bg-gray-800 p-4 rounded-lg mb-4">
             <div className="flex flex-col sm:flex-row justify-between text-center gap-4">
               <div className="flex-1">
                 <p className="text-lg font-semibold text-orange-500">Players Online</p>
-                <p className="text-xl text-white">440</p>
+                <p className="text-xl text-white">{playersOnline}</p>
               </div>
               <div className="flex-1">
                 <p className="text-lg font-semibold text-orange-500">Players Registered</p>
-                <p className="text-xl text-white">2,340</p>
+                <p className="text-xl text-white">{playersRegistered.toLocaleString()}</p>
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-semibold text-orange-500">Players Playing</p>
+                <p className="text-xl text-white">{playersPlaying}</p>
               </div>
             </div>
           </div>
@@ -438,119 +389,66 @@ const App = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-800 p-4 mt-6">
-        <div className="text-center text-white">
-          <p className="text-sm">&copy; {new Date().getFullYear()} Money Graph. All Rights Reserved.</p>
-          <p className="text-sm">
-            <a href="/terms-of-service" className="text-orange-500 hover:underline">
-              Terms of Service
-            </a>
-          </p>
-        </div>
+      <footer className="bg-gray-800 p-4 mt-6 text-center text-sm text-white">
+        © {new Date().getFullYear()} Money Graph. All Rights Reserved.
       </footer>
     </div>
   );
 };
 
-// 🔥 Random transaction messages component
+// 🔥 Transaction messages
 const TransactionMessages = () => {
   const [message, setMessage] = useState("");
   const [visible, setVisible] = useState(false);
-
-  // refs for timers so we can clean up
   const fadeInTimer = useRef(null);
   const fadeOutTimer = useRef(null);
   const intervalRef = useRef(null);
 
-  const randomId = () =>
-    "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const randomId = () => "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-  // ✅ Weighted random amount generator
   const randomAmount = () => {
-    const roll = Math.random(); // 0..1
-
-    if (roll < 0.7) {
-      // 70% chance → 3000 - 5000
-      return Math.random() * (5000 - 3000) + 3000;
-    } else if (roll < 0.8) {
-      // next 10% → 20000 - 40000
-      return Math.random() * (40000 - 20000) + 20000;
-    } else {
-      // remaining 20% → 6000 - 15000
-      return Math.random() * (15000 - 6000) + 6000;
-    }
+    const roll = Math.random();
+    if (roll < 0.7) return Math.random() * (5000 - 3000) + 3000;
+    if (roll < 0.8) return Math.random() * (40000 - 20000) + 20000;
+    return Math.random() * (15000 - 6000) + 6000;
   };
 
-  // format with commas and 2 decimals
   const fmt = (n) =>
-    Number(n).toLocaleString("en-KE", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
- // ✅ Random transaction ID
-const randomId = () => Math.floor(100000 + Math.random() * 900000);
-
-// ✅ Format date (today or tomorrow, never yesterday)
-const getFormattedDate = () => {
-  const now = new Date();
-  if (Math.random() < 0.5) {
-    return now.toLocaleDateString("en-GB"); // today
-  } else {
+  const getFormattedDate = () => {
+    const now = new Date();
+    if (Math.random() < 0.5) return now.toLocaleDateString("en-GB");
     const tomorrow = new Date();
     tomorrow.setDate(now.getDate() + 1);
-    return tomorrow.toLocaleDateString("en-GB"); // tomorrow
-  }
-};
-
-// ✅ Generate realistic time (1–2 hours ago, never future or yesterday)
-const randomTime = () => {
-  const now = new Date();
-  const pastHours = 1 + Math.floor(Math.random() * 2); // pick 1 or 2
-  now.setHours(now.getHours() - pastHours);
-
-  return now.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-useEffect(() => {
-  const showOne = () => {
-    // generate amount
-    const amountVal = randomAmount();
-
-    // ensure balance > amount: add a random extra (100..50,000)
-    const extra = Math.random() * (50000 - 100) + 100;
-    const balanceVal = amountVal + extra;
-
-    const amountStr = fmt(amountVal);
-    const balanceStr = fmt(balanceVal);
-
-    // ✅ updated with real date & time
-    const msg = `${randomId()} Confirmed. You have received Ksh${amountStr} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
-
-    // set new message and run fade in/out cycle
-    setMessage(msg);
-    setVisible(false);
-
-    // clear any previous timers
-    if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
-    if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
-
-    // small delay so the transition can animate (fade in)
-    fadeInTimer.current = setTimeout(() => setVisible(true), 100);
-
-    // hold visible for ~5s then fade out
-    fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
+    return tomorrow.toLocaleDateString("en-GB");
   };
 
-  showOne();
-}, []);
+  const randomTime = () => {
+    const now = new Date();
+    const pastHours = 1 + Math.floor(Math.random() * 2);
+    now.setHours(now.getHours() - pastHours);
+    return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+  };
 
+  useEffect(() => {
+    const showOne = () => {
+      const amountVal = randomAmount();
+      const extra = Math.random() * (50000 - 100) + 100;
+      const balanceVal = amountVal + extra;
+      const msg = `${randomId()} Confirmed. You have received Ksh${fmt(
+        amountVal
+      )} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
 
-    // show immediately, then every 7s
+      setMessage(msg);
+      setVisible(false);
+      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+
+      fadeInTimer.current = setTimeout(() => setVisible(true), 100);
+      fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
+    };
+
     showOne();
     intervalRef.current = setInterval(showOne, 7000);
 
@@ -561,19 +459,21 @@ useEffect(() => {
     };
   }, []);
 
-  return (
-    <div className="h-24 relative mb-4">
-      <div
-        className={`absolute inset-0 flex items-center justify-center text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md transition-opacity duration-2000 ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
-        role="status"
-        aria-live="polite"
-      >
-        {message}
-      </div>
+ return (
+  <div className="h-24 relative mb-4">
+    <div
+      className={`absolute inset-0 flex items-center justify-center text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md transition-opacity duration-2000 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+      role="status"
+      aria-live="polite"
+    >
+      {message}
     </div>
-  );
+  </div>
+);
 };
 
+// ✅ close function FIRST, then export
 export default App;
+
