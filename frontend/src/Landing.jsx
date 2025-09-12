@@ -230,127 +230,159 @@ const App = () => {
       </header>
 
       {/* Auth Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-700 bg-opacity-75 flex justify-center items-center z-50 p-4">
-          <div className="relative bg-gray-800 p-6 rounded-lg w-full max-w-md">
-            <button
-              onClick={handleCloseModal}
-              className="absolute right-3 top-3 text-white/80 hover:text-white"
-            >
-              ✖
-            </button>
+     {/* Auth Modal */}
+{isModalOpen && (
+  <div className="fixed inset-0 bg-gray-700 bg-opacity-75 flex justify-center items-center z-50 p-4">
+    <div className="relative bg-gray-800 p-6 rounded-lg w-full max-w-md">
+      <button
+        onClick={handleCloseModal}
+        className="absolute right-3 top-3 text-white/80 hover:text-white"
+      >
+        ✖
+      </button>
 
-            <h2 className="text-xl font-semibold mb-4">
-              {isLogin ? "Log Into Money Graph" : "Sign Up Instantly"}
-            </h2>
+      <h2 className="text-xl font-semibold mb-4">
+        {isLogin ? "Log Into Money Graph" : "Sign Up Instantly"}
+      </h2>
 
-            {/* Username for Register */}
-            {!isLogin && (
-              <div className="mb-2">
-                <label className="block text-gray-300 mb-1 text-sm">Username</label>
-                <input
-                  type="text"
-                  placeholder="Enter username"
-                  className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Phone + OTP */}
-            <div className="mb-2">
-              <label className="block text-gray-300 mb-1 text-sm">Phone number</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter phone number"
-                  className="flex-1 px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-                {!isLogin && (
-                  <button
-                    className={`px-2 py-2 rounded-md text-xs ${otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"} text-white`}
-                    onClick={handleSendOtp}
-                    disabled={otpButtonDisabled}
-                  >
-                    {otpButtonDisabled ? "Sent" : "Send OTP"}
-                  </button>
-                )}
-              </div>
-
-              {!isLogin && otpSent && (
-                <div className="mt-2">
-                  {otpNoticeVisible && <p className="text-green-400 text-xs mb-2">OTP sent</p>}
-                  <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
-                    {otp.map((digit, index) => (
-                      <input
-                        key={index}
-                        type="text"
-                        maxLength="1"
-                        className="w-10 h-10 text-center text-lg rounded bg-gray-700 text-white"
-                        value={digit}
-                        onChange={(e) => handleOtpChange(e, index)}
-                        onKeyDown={(e) => handleOtpKeyDown(e, index)}
-                        ref={(el) => (otpInputsRef.current[index] = el)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Password */}
-            <div className="mb-2">
-              <label className="block text-gray-300 mb-1 text-sm">Password</label>
-              <input
-                type="password"
-                placeholder="Enter password"
-                className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            {/* Confirm Password */}
-            {!isLogin && (
-              <div className="mb-2">
-                <label className="block text-gray-300 mb-1 text-sm">Re-enter Password</label>
-                <input
-                  type="password"
-                  placeholder="Re-enter password"
-                  className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Buttons */}
-            <div className="mt-4">
-              {isLogin ? (
-                <button
-                  className="w-full py-2 bg-blue-500 text-white rounded-md text-sm"
-                  onClick={handleLogin}
-                >
-                  LOGIN
-                </button>
-              ) : (
-                <button
-                  className="w-full py-2 bg-blue-500 text-white rounded-md text-sm"
-                  onClick={handleRegister}
-                >
-                  JOIN MONEY GRAPH
-                </button>
-              )}
-            </div>
-
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-            {success && <p className="text-green-500 text-sm mt-2">{success}</p>}
-          </div>
+      {/* Username for Register */}
+      {!isLogin && (
+        <div className="mb-2">
+          <label className="block text-gray-300 mb-1 text-sm">Username</label>
+          <input
+            type="text"
+            placeholder="Enter username"
+            className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
         </div>
       )}
+
+      {/* Phone + OTP */}
+      <div className="mb-2">
+        <label className="block text-gray-300 mb-1 text-sm">Phone number</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Enter phone number"
+            className="flex-1 px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+          />
+          {!isLogin && (
+            <button
+              className={`px-2 py-2 rounded-md text-xs ${
+                otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"
+              } text-white`}
+              onClick={handleSendOtp}
+              disabled={otpButtonDisabled}
+            >
+              {otpButtonDisabled ? "Sent" : "Send OTP"}
+            </button>
+          )}
+        </div>
+
+        {!isLogin && otpSent && (
+          <div className="mt-2">
+            {otpNoticeVisible && (
+              <p className="text-green-400 text-xs mb-2">OTP sent</p>
+            )}
+            <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+              {otp.map((digit, index) => (
+                <input
+                  key={index}
+                  type="text"
+                  maxLength="1"
+                  className="w-10 h-10 text-center text-lg rounded bg-gray-700 text-white"
+                  value={digit}
+                  onChange={(e) => handleOtpChange(e, index)}
+                  onKeyDown={(e) => handleOtpKeyDown(e, index)}
+                  ref={(el) => (otpInputsRef.current[index] = el)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Password */}
+      <div className="mb-2">
+        <label className="block text-gray-300 mb-1 text-sm">Password</label>
+        <input
+          type="password"
+          placeholder="Enter password"
+          className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+
+      {/* Confirm Password */}
+      {!isLogin && (
+        <div className="mb-2">
+          <label className="block text-gray-300 mb-1 text-sm">
+            Re-enter Password
+          </label>
+          <input
+            type="password"
+            placeholder="Re-enter password"
+            className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* Buttons */}
+      <div className="mt-4">
+        {isLogin ? (
+          <button
+            className="w-full py-2 bg-blue-500 text-white rounded-md text-sm"
+            onClick={handleLogin}
+          >
+            LOGIN
+          </button>
+        ) : (
+          <button
+            className="w-full py-2 bg-blue-500 text-white rounded-md text-sm"
+            onClick={handleRegister}
+          >
+            JOIN MONEY GRAPH
+          </button>
+        )}
+      </div>
+
+      {/* Toggle login/register */}
+      <div className="mt-3 text-center text-sm">
+        {isLogin ? (
+          <p>
+            Don’t have an account?{" "}
+            <button
+              className="text-orange-400 hover:underline"
+              onClick={() => setIsLogin(false)}
+            >
+              Sign up
+            </button>
+          </p>
+        ) : (
+          <p>
+            Already have an account?{" "}
+            <button
+              className="text-orange-400 hover:underline"
+              onClick={() => setIsLogin(true)}
+            >
+              Log in
+            </button>
+          </p>
+        )}
+      </div>
+
+      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+      {success && <p className="text-green-500 text-sm mt-2">{success}</p>}
+    </div>
+  </div>
+)}
 
       {/* Main */}
       <main className="flex flex-col sm:flex-row flex-1 p-4 gap-6">
