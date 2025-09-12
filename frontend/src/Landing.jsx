@@ -11,6 +11,7 @@ const App = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
 
+
   // Auth state
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");

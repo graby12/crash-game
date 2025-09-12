@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -257,7 +257,10 @@ const Homepage = () => {
         </div>
       </main>
 
-      {/* Footer - not fixed anymore */}
+      {/* 🔥 Transaction Messages */}
+      <TransactionMessages />
+
+      {/* Footer */}
       <footer className="bg-orange-500 text-center py-2 sm:py-4 mt-6">
         <p className="text-white text-sm sm:text-base">SPECIAL HAPPY HOUR DEAL!</p>
         <p className="text-white text-xs sm:text-sm">PATA 10% YA LOSSES ZAKO ALL WEEK BETWEEN 8AM - 10AM</p>
@@ -333,6 +336,81 @@ const Homepage = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// 🔥 Transaction messages component
+const TransactionMessages = () => {
+  const [message, setMessage] = useState("");
+  const [visible, setVisible] = useState(false);
+  const fadeInTimer = useRef(null);
+  const fadeOutTimer = useRef(null);
+  const intervalRef = useRef(null);
+
+  const randomId = () => "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
+
+  const randomAmount = () => {
+    const roll = Math.random();
+    if (roll < 0.7) return Math.random() * (5000 - 3000) + 3000;
+    if (roll < 0.8) return Math.random() * (40000 - 20000) + 20000;
+    return Math.random() * (15000 - 6000) + 6000;
+  };
+
+  const fmt = (n) =>
+    Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const getFormattedDate = () => {
+    const now = new Date();
+    if (Math.random() < 0.5) return now.toLocaleDateString("en-GB");
+    const tomorrow = new Date();
+    tomorrow.setDate(now.getDate() + 1);
+    return tomorrow.toLocaleDateString("en-GB");
+  };
+
+  const randomTime = () => {
+    const now = new Date();
+    const pastHours = 1 + Math.floor(Math.random() * 2);
+    now.setHours(now.getHours() - pastHours);
+    return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+  };
+
+  useEffect(() => {
+    const showOne = () => {
+      const amountVal = randomAmount();
+      const msg = `${randomId()} Confirmed. You have received Ksh${fmt(
+        amountVal
+      )} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
+
+      setMessage(msg);
+      setVisible(false);
+      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+
+      fadeInTimer.current = setTimeout(() => setVisible(true), 100);
+      fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
+    };
+
+    showOne();
+    intervalRef.current = setInterval(showOne, 7000);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+    };
+  }, []);
+
+  return (
+    <div className="fixed bottom-16 left-1/2 transform -translate-x-1/2 w-[90%] sm:w-[500px] z-[9999]">
+      <div
+        className={`text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md text-center transition-all duration-700 ease-out
+          ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+        role="status"
+        aria-live="polite"
+      >
+        {message}
+      </div>
     </div>
   );
 };
