@@ -31,7 +31,7 @@ export default function CrashGame({ showControls = true }) {
   const [running, setRunning] = useState(false);
   const [cashedOut, setCashedOut] = useState(false);
   const [history, setHistory] = useState([]);
-  const [betAmount, setBetAmount] = useState(100);
+  const [betAmount, setBetAmount] = useState(10);
   const [useAutoCashout, setUseAutoCashout] = useState(false);
   const [autoCashout, setAutoCashout] = useState(2);
   const [result, setResult] = useState(null);
@@ -106,11 +106,11 @@ export default function CrashGame({ showControls = true }) {
       return;
     }
 
-    if (betAmount < 100) {
-      setBetError("❌ Minimum bet is 100");
-      setBetAmount(100);
-      return;
-    }
+      if (betAmount < 10) {
+        setBetError("❌ Minimum bet is 10");
+        return;
+   }
+
 
     if (betAmount > availableBalance) {
       setBetError("❌ Insufficient balance!");
@@ -347,14 +347,17 @@ export default function CrashGame({ showControls = true }) {
 
               <div className="flex items-end gap-4 mx-auto flex-wrap sm:flex-nowrap justify-center">
                 <div className="flex flex-col">
-                  <label className="block text-xs">Bet Amount</label>
-                  <input
-                    type="number"
-                    value={betAmount}
-                    onChange={(e) => setBetAmount(Math.max(100, Number(e.target.value)))}
-                    className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
-                  />
-                </div>
+                        <label className="block text-xs">Bet Amount</label>
+                        <input
+                          type="number"
+                          value={betAmount}
+                          onChange={(e) => setBetAmount(Number(e.target.value))}
+                          className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
+                          min={10}
+                        />
+                        <p className="text-[10px] text-gray-400">Min: 10</p>
+                      </div>
+
 
                 <div className="flex flex-col">
                   <label className="block text-xs">Auto Cash Out (x)</label>

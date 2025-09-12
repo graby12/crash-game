@@ -17,13 +17,7 @@ const Homepage = () => {
   // ---------------- STATES ----------------
   const [betAmount, setBetAmount] = useState('');
   const [autoCashOut, setAutoCashOut] = useState(2);
-  const [liveUsers, setLiveUsers] = useState([
-    { user: 'Myles13', amount: 3000, profit: 150 },
-    { user: 'Saito999', amount: 999, profit: 50 },
-    { user: 'Support', amount: 150, profit: 10 },
-    { user: 'New29055', amount: 100, profit: 5 },
-    { user: 'Kkipchumba', amount: 40, profit: 3 },
-  ]);
+  const [liveUsers, setLiveUsers] = useState([]);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -34,6 +28,8 @@ const Homepage = () => {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositPhone, setDepositPhone] = useState('');
   const [isDepositProcessing, setIsDepositProcessing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
 
   // ---------------- FETCH USER BALANCE ----------------
   const fetchUserBalance = async () => {
@@ -206,22 +202,72 @@ const Homepage = () => {
   // ----------------- RENDER -----------------
   return (
     <div className="bg-gray-900 text-white min-h-screen flex flex-col">
-      {/* Header - fixed */}
-      <header className="flex flex-col sm:flex-row items-center p-4 bg-gray-800 fixed top-0 w-full z-50">
-        <div className="text-lg sm:text-xl font-bold flex-1 text-center sm:text-left mb-2 sm:mb-0">MONEY GRAPH</div>
-        <div className="flex flex-col sm:flex-row sm:space-x-4 flex-1 justify-center text-sm sm:text-base mb-2 sm:mb-0">
-          <button onClick={handleWithdraw} className="hover:text-orange-500">WITHDRAW</button>
-          <button onClick={handleDeposit} className="hover:text-orange-500">DEPOSIT</button>
-          <a href="#" className="hover:text-orange-500">NEED ASSISTANCE?</a>
+          {/* Header */}
+      <header className="bg-gray-800 fixed top-0 w-full z-50">
+        {/* Desktop / Tablet Header */}
+        <div className="hidden sm:flex flex-col sm:flex-row items-center p-4">
+          <div className="text-lg sm:text-xl font-bold flex-1 text-center sm:text-left mb-2 sm:mb-0">
+            MONEY GRAPH
+          </div>
+          <div className="flex flex-col sm:flex-row sm:space-x-4 flex-1 justify-center text-sm sm:text-base mb-2 sm:mb-0">
+            <button onClick={handleWithdraw} className="hover:text-orange-500">WITHDRAW</button>
+            <button onClick={handleDeposit} className="hover:text-orange-500">DEPOSIT</button>
+            <a href="#" className="hover:text-orange-500">NEED ASSISTANCE?</a>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
+            <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">
+              KSH {availableBalance}
+            </span>
+            <span className="hidden sm:block">KKK5249201</span>
+            <button
+              onClick={handleLogOut}
+              className="bg-red-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg hover:bg-red-500 mt-2 sm:mt-0"
+            >
+              LOG OUT
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
-          <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">KSH {availableBalance}</span>
-          <span className="hidden sm:block">KKK5249201</span>
-          <button onClick={handleLogOut} className="bg-red-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg hover:bg-red-500 mt-2 sm:mt-0">
-            LOG OUT
+
+        {/* Mobile Header */}
+        <div className="sm:hidden flex items-center justify-between p-4 relative">
+          {/* Menu Button (☰) */}
+          <button
+            className="text-white text-2xl"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            ☰
           </button>
+
+          {/* Assistance + Balance centered */}
+          <div className="flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
+            <p className="text-xs text-gray-300">Need Assistance?</p>
+            <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
+              KSH {availableBalance}
+            </span>
+          </div>
         </div>
+        {/* Mobile Drawer */}
+          {menuOpen && (
+            <div className="fixed top-0 left-0 h-full w-56 bg-gray-800 text-white shadow-lg z-50 sm:hidden">
+              <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                <h2 className="font-semibold">Menu</h2>
+                <button
+                  className="text-white text-xl"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  ✖
+                </button>
+              </div>
+              <div className="flex flex-col">
+                <button onClick={handleDeposit} className="px-4 py-3 hover:bg-gray-700 text-left">Deposit</button>
+                <button onClick={handleWithdraw} className="px-4 py-3 hover:bg-gray-700 text-left">Withdraw</button>
+                <button onClick={handleLogOut} className="px-4 py-3 hover:bg-gray-700 text-left">Log Out</button>
+              </div>
+            </div>
+          )}
+
       </header>
+
 
       {/* Main scrollable content */}
       <main className="flex-1 overflow-y-auto pt-28 pb-12 px-4 sm:px-8">
