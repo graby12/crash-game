@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import jwtDecode from 'jwt-decode';
 import io from 'socket.io-client';
+import { motion } from 'framer-motion';
 import CrashGame from "./CrashGame.jsx";
+import TermsModal from "./TermsModal.jsx"; // ✅ fixed terms modal
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -17,7 +19,6 @@ const Homepage = () => {
   // ---------------- STATES ----------------
   const [betAmount, setBetAmount] = useState('');
   const [autoCashOut, setAutoCashOut] = useState(2);
-  const [liveUsers, setLiveUsers] = useState([]);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -29,7 +30,7 @@ const Homepage = () => {
   const [depositPhone, setDepositPhone] = useState('');
   const [isDepositProcessing, setIsDepositProcessing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-
+  const [isTermsOpen, setIsTermsOpen] = useState(false); // ✅ terms modal state
 
   // ---------------- FETCH USER BALANCE ----------------
   const fetchUserBalance = async () => {
@@ -97,22 +98,6 @@ const Homepage = () => {
   useEffect(() => {
     fetchCrashMultiplier();
     const interval = setInterval(fetchCrashMultiplier, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ---------------- FETCH LIVE USERS ----------------
-  const fetchLiveUsers = async () => {
-    try {
-      const response = await axios.get("https://crash-game-sse3.onrender.com/api/live-users");
-      if (response.data) setLiveUsers(response.data);
-    } catch (err) {
-      console.error("Error fetching live users:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchLiveUsers();
-    const interval = setInterval(fetchLiveUsers, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -202,7 +187,7 @@ const Homepage = () => {
   // ----------------- RENDER -----------------
   return (
     <div className="bg-gray-900 text-white min-h-screen flex flex-col">
-          {/* Header */}
+      {/* Header */}
       <header className="bg-gray-800 fixed top-0 w-full z-50">
         {/* Desktop / Tablet Header */}
         <div className="hidden sm:flex flex-col sm:flex-row items-center p-4">
@@ -212,7 +197,7 @@ const Homepage = () => {
           <div className="flex flex-col sm:flex-row sm:space-x-4 flex-1 justify-center text-sm sm:text-base mb-2 sm:mb-0">
             <button onClick={handleWithdraw} className="hover:text-orange-500">WITHDRAW</button>
             <button onClick={handleDeposit} className="hover:text-orange-500">DEPOSIT</button>
-            <a href="#" className="hover:text-orange-500">NEED ASSISTANCE?</a>
+            <button onClick={() => setIsTermsOpen(true)} className="hover:text-orange-500">TERMS OF SERVICE</button>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
             <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">
@@ -230,7 +215,6 @@ const Homepage = () => {
 
         {/* Mobile Header */}
         <div className="sm:hidden flex items-center justify-between p-4 relative">
-          {/* Menu Button (☰) */}
           <button
             className="text-white text-2xl"
             onClick={() => setMenuOpen(!menuOpen)}
@@ -238,74 +222,54 @@ const Homepage = () => {
             ☰
           </button>
 
-          {/* Assistance + Balance centered */}
-          {/* Assistance + Balance centered */}
-        <div className="flex flex-row items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
-          <p className="text-xs text-gray-300">Need Assistance?</p>
-          <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
-            KSH {availableBalance}
-          </span>
+          {/* ✅ Balance + Deposit only */}
+          <div className="flex flex-row items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
+            <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
+              KSH {availableBalance}
+            </span>
+            <button
+              onClick={handleDeposit}
+              className="px-3 py-1 bg-orange-600 rounded-md hover:bg-orange-500 text-white text-sm"
+            >
+              Deposit
+            </button>
+          </div>
         </div>
-        </div>
+
         {/* Mobile Drawer */}
-          {menuOpen && (
-            <div className="fixed top-0 left-0 h-full w-56 bg-gray-800 text-white shadow-lg z-50 sm:hidden">
-              <div className="flex justify-between items-center p-4 border-b border-gray-700">
-                <h2 className="font-semibold">Menu</h2>
-                <button
-                  className="text-white text-xl"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  ✖
-                </button>
-              </div>
-              <div className="flex flex-col">
-                <button onClick={handleDeposit} className="px-4 py-3 hover:bg-gray-700 text-left">Deposit</button>
-                <button onClick={handleWithdraw} className="px-4 py-3 hover:bg-gray-700 text-left">Withdraw</button>
-                <button onClick={handleLogOut} className="px-4 py-3 hover:bg-gray-700 text-left">Log Out</button>
-              </div>
+        {menuOpen && (
+          <div className="fixed top-0 left-0 h-full w-56 bg-gray-800 text-white shadow-lg z-50 sm:hidden">
+            <div className="flex justify-between items-center p-4 border-b border-gray-700">
+              <h2 className="font-semibold">Menu</h2>
+              <button
+                className="text-white text-xl"
+                onClick={() => setMenuOpen(false)}
+              >
+                ✖
+              </button>
             </div>
-          )}
-
+            <div className="flex flex-col">
+              <button onClick={() => { handleWithdraw(); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Withdraw</button>
+              <button onClick={() => { setIsTermsOpen(true); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Terms of Service</button>
+              <button onClick={() => { handleLogOut(); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Log Out</button>
+            </div>
+          </div>
+        )}
       </header>
-
 
       {/* Main scrollable content */}
       <main className="flex-1 overflow-y-auto pt-28 pb-12 px-4 sm:px-8">
-        <div className="flex flex-col lg:flex-row justify-between w-full max-w-7xl mx-auto space-y-6 lg:space-y-0 lg:space-x-6">
+        <div className="w-full max-w-7xl mx-auto">
           {/* Crash Game */}
-          <div className="w-full lg:w-2/3 bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+          <div className="w-full bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl sm:text-2xl text-center mb-4">Crash Game Multiplier</h2>
             <CrashGame showControls={true}/>
           </div>
-
-          {/* Live Users */}
-          <div className="w-full lg:w-1/3 bg-gray-700 p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-lg sm:text-xl font-semibold text-center mb-4">Live Users</h2>
-            <div className="space-y-2">
-              <div className="flex justify-between font-semibold text-sm sm:text-base">
-                <div>User</div>
-                <div>Amount</div>
-                <div>Profit</div>
-              </div>
-              {liveUsers.map((user, index) => (
-                <div key={index} className="flex justify-between text-xs sm:text-sm">
-                  <div>{user.user}</div>
-                  <div className={user.amount === '-' ? "text-red-500" : ""}>
-                    {user.amount}
-                  </div>
-                  <div className={user.profit === '-' ? "text-red-500" : "text-green-500"}>
-                    {user.profit}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
-      </main>
 
-      {/* 🔥 Transaction Messages */}
-      <TransactionMessages />
+        {/* 🔥 Transaction Messages */}
+        <TransactionMessages />
+      </main>
 
       {/* Footer */}
       <footer className="bg-orange-500 text-center py-2 sm:py-4 mt-6">
@@ -383,6 +347,9 @@ const Homepage = () => {
           </div>
         </div>
       )}
+
+      {/* Terms Modal */}
+      <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
     </div>
   );
 };
@@ -395,7 +362,8 @@ const TransactionMessages = () => {
   const fadeOutTimer = useRef(null);
   const intervalRef = useRef(null);
 
-  const randomId = () => "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const randomId = () =>
+    "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
   const randomAmount = () => {
     const roll = Math.random();
@@ -405,18 +373,25 @@ const TransactionMessages = () => {
   };
 
   const fmt = (n) =>
-    Number(n).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n).toLocaleString("en-KE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
-    const getFormattedDate = () => {
-      const now = new Date();
-      return now.toLocaleDateString("en-GB"); // always today
-    };
+  const getFormattedDate = () => {
+    const now = new Date();
+    return now.toLocaleDateString("en-GB");
+  };
 
   const randomTime = () => {
     const now = new Date();
     const pastHours = 1 + Math.floor(Math.random() * 2);
     now.setHours(now.getHours() - pastHours);
-    return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true });
+    return now.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   };
 
   useEffect(() => {
@@ -446,17 +421,20 @@ const TransactionMessages = () => {
   }, []);
 
   return (
-    <div className="fixed bottom-16 left-1/2 transform -translate-x-1/2 w-[90%] sm:w-[500px] z-[9999]">
-      <div
-        className={`text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md text-center transition-all duration-700 ease-out
-          ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}
+    <div className="h-24 relative mb-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: visible ? 1 : 0 }}
+        transition={{ duration: 0.5 }}
+        className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md"
         role="status"
         aria-live="polite"
       >
         {message}
-      </div>
+      </motion.div>
     </div>
   );
 };
+
 
 export default Homepage;
