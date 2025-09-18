@@ -81,7 +81,7 @@ const Homepage = () => {
   // ---------------- FETCH CRASH MULTIPLIER ----------------
   const fetchCrashMultiplier = async () => {
     try {
-      const response = await axios.get('https://crash-game-sse3.onrender.com/api/bet/crash');
+      const response = await axios.get('https://crash-game-sse3.onrender.com/api/crash');
       const data = response.data;
       const point = data?.crashPoint ?? data?.crashMultiplier ?? data?.crash ?? null;
       if (point !== null && point !== undefined) {

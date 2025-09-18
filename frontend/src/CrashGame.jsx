@@ -1,5 +1,5 @@
 // CrashGame.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Chart as ChartJS,
   LineElement,
@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import annotationPlugin from "chartjs-plugin-annotation";
 import { Line } from "react-chartjs-2";
+import io from "socket.io-client";
 
 ChartJS.register(
   LineElement,
@@ -25,18 +26,19 @@ ChartJS.register(
 );
 
 export default function CrashGame({ showControls = true }) {
+  const socketRef = useRef(null);
+
   const [availableBalance, setAvailableBalance] = useState(0);
   const [multiplier, setMultiplier] = useState(1);
   const [crashPoint, setCrashPoint] = useState(null);
   const [running, setRunning] = useState(false);
   const [cashedOut, setCashedOut] = useState(false);
   const [history, setHistory] = useState([]);
-  const [betAmount, setBetAmount] = useState("");
+  const [betAmount, setBetAmount] = useState(0);
   const [useAutoCashout, setUseAutoCashout] = useState(false);
-  const [autoCashout, setAutoCashout] = useState(2);
+  const [autoCashout, setAutoCashout] = useState("");
   const [result, setResult] = useState(null);
-  const [multiplierData, setMultiplierData] = useState([]);
-  const [timeData, setTimeData] = useState([]);
+  const [chartData, setChartData] = useState([{ x: 0, y: 1 }]); // FIX
   const [countdown, setCountdown] = useState(null);
   const [betPlaced, setBetPlaced] = useState(false);
   const [waitingForStart, setWaitingForStart] = useState(false);
@@ -49,7 +51,7 @@ export default function CrashGame({ showControls = true }) {
 
   const isLoggedIn = Boolean(localStorage.getItem("token"));
 
-  // --- Auto-clear errors after 3s ---
+  // Auto-clear errors
   useEffect(() => {
     if (betError) {
       const t = setTimeout(() => setBetError(""), 3000);
@@ -63,59 +65,98 @@ export default function CrashGame({ showControls = true }) {
     }
   }, [generalError]);
 
-  // --- Generate fake live users for a round ---
-  const generateLiveUsers = (crashValue) => {
-    const sampleUsers = Array.from({ length: 8 }, (_, i) => {
-      const bet = Math.floor(Math.random() * 200 + 50);
-      // 70% chance user cashes out before crash
-      const safeCashout = Math.random() < 0.7;
-      const cashoutPoint = safeCashout
-        ? parseFloat((Math.random() * (crashValue - 1) + 1).toFixed(2))
-        : parseFloat((crashValue + Math.random() * 2).toFixed(2));
+  // ---- SOCKET.IO EVENTS ----
+  useEffect(() => {
+    // Wake server before opening socket
+    fetch("https://crash-game-sse3.onrender.com/").catch(() =>
+      console.warn("Wake-up ping failed")
+    );
 
-      return {
-        user: `Player${i + 1}`,
-        amount: bet,
-        cashoutPoint,
-        multiplier: "-",
-        profit: "-",
-        active: true,
-      };
+    socketRef.current = io("https://crash-game-sse3.onrender.com", {
+      transports: ["websocket", "polling"], // FIX: allow fallback
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
-    setLiveUsers(sampleUsers);
-  };
 
-  // --- Start round ---
-  const startRound = async () => {
-    try {
-      const res = await fetch("https://crash-game-sse3.onrender.com/api/crash");
-      const data = await res.json();
-      setCrashPoint(data.crashMultiplier);
+    const socket = socketRef.current;
 
-      // Generate live users for this round
-      generateLiveUsers(data.crashMultiplier);
+    socket.on("connect", () => {
+      console.log("🟢 Connected to WebSocket");
+    });
 
-      // stop countdown when round starts
-      setCountdown(null);
-      setMultiplier(0);
-      setMultiplierData([0]);
-      setTimeData([0]);
-      setRunning(true);
-      setCashedOut(false);
+    socket.on("connect_error", (err) => {
+      console.error("❌ Socket connection error:", err.message);
+    });
+
+    socket.on("countdown", (time) => {
+      setCountdown(time);
+      setRunning(false);
+      setMultiplier(1);
+      setChartData([{ x: 0, y: 1 }]);
+      setShowCrash(null);
       setResult(null);
+      setCashedOut(false);
+    });
+
+    socket.on("roundStarted", ({ crashPoint }) => {
+      setCrashPoint(crashPoint);
+      setRunning(true);
+      setMultiplier(1);
+      setChartData([{ x: 0, y: 1 }]);
+      setShowCrash(null);
+      setResult(null);
+      setCashedOut(false);
       setWaitingForStart(false);
+    });
+
+    socket.on("multiplierUpdate", ({ multiplier, elapsed }) => {
+      setMultiplier(multiplier);
+      setChartData((prev) => [...prev, { x: elapsed, y: multiplier }]); // FIX
+    });
+
+    socket.on("roundEnded", ({ crashPoint, history }) => {
+      setRunning(false);
+      setShowCrash(crashPoint);
+      setHistory(history.slice(-20));
+    });
+
+    socket.on("balanceUpdated", ({ userId, newBalance }) => {
+      const myId = localStorage.getItem("userId");
+      if (userId === myId) {
+        setAvailableBalance(newBalance);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // ---- Fetch live users ----
+  const fetchLiveUsers = async () => {
+    try {
+      const res = await fetch(
+        "https://crash-game-sse3.onrender.com/api/live-users"
+      );
+      const data = await res.json();
+      setLiveUsers(data);
     } catch (err) {
-      console.error("Error fetching crash:", err);
+      console.error("Error fetching live users:", err);
     }
   };
+  useEffect(() => {
+    fetchLiveUsers();
+    const interval = setInterval(fetchLiveUsers, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // --- Place bet ---
+  // ---- Place bet ----
   const handlePlaceBet = async () => {
     setBetError("");
     setGeneralError("");
 
     if (countdown === null) {
-      setGeneralError("❌ You can only place bets during countdown before game starts!");
+      setGeneralError("❌ You can only place bets during countdown!");
       return;
     }
 
@@ -129,19 +170,32 @@ export default function CrashGame({ showControls = true }) {
       return;
     }
 
+    if (useAutoCashout && autoCashout) {
+      const valid = /^\d+(\.\d{1,2})?$/.test(autoCashout);
+      if (!valid) {
+        setBetError("❌ Auto cashout must have up to two decimals");
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("https://crash-game-sse3.onrender.com/api/bet/bet", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          amount: betAmount,
-          ...(useAutoCashout ? { autoCashOut: autoCashout } : {}),
-        }),
-      });
+      const res = await fetch(
+        "https://crash-game-sse3.onrender.com/api/bet/bet",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            amount: betAmount,
+            ...(useAutoCashout && autoCashout
+              ? { autoCashOut: parseFloat(Number(autoCashout).toFixed(2)) }
+              : {}),
+          }),
+        }
+      );
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to place bet");
@@ -155,19 +209,22 @@ export default function CrashGame({ showControls = true }) {
     }
   };
 
-  // --- Withdraw ---
+  // ---- Withdraw ----
   const handleWithdraw = async () => {
     if (running && betPlaced && !cashedOut) {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://crash-game-sse3.onrender.com/api/bet/withdraw", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ multiplier, betAmount }),
-        });
+        const res = await fetch(
+          "https://crash-game-sse3.onrender.com/api/bet/withdraw",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ multiplier, betAmount }),
+          }
+        );
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to cash out");
@@ -176,7 +233,6 @@ export default function CrashGame({ showControls = true }) {
         setResult({ type: "win", amount: data.payout });
         setCashedOut(true);
         setRunning(false);
-        setHistory([`${multiplier.toFixed(2)}x`, ...history.slice(0, 6)]);
       } catch (err) {
         console.error("Error withdrawing:", err);
         setGeneralError("❌ Withdraw failed: " + err.message);
@@ -184,120 +240,12 @@ export default function CrashGame({ showControls = true }) {
     }
   };
 
-  // --- Countdown ---
-  const triggerCountdown = () => setCountdown(5.0);
-
-  useEffect(() => {
-    if (countdown !== null) {
-      if (countdown <= 0) {
-        setCountdown(null);
-        setWaitingForStart(false);
-        startRound();
-        return;
-      }
-      const timer = setTimeout(() => {
-        setCountdown((prev) => (prev - 0.1).toFixed(1));
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
-
-  // --- Multiplier animation + live users updates ---
-  useEffect(() => {
-    let animationFrame;
-    let startTime;
-
-    if (running && crashPoint) {
-      const animate = (timestamp) => {
-        if (!startTime) startTime = timestamp;
-        const elapsed = (timestamp - startTime) / 1000;
-        const growthRate = 0.18;
-        const current = Math.exp(growthRate * elapsed);
-
-        // Update live users cashouts
-        setLiveUsers((prev) =>
-          prev.map((u) => {
-            if (u.active && current >= u.cashoutPoint && u.cashoutPoint <= crashPoint) {
-              return {
-                ...u,
-                multiplier: `${u.cashoutPoint}x`,
-                profit: (u.amount * u.cashoutPoint).toFixed(2),
-                active: false,
-              };
-            }
-            return u;
-          })
-        );
-
-        if (current >= crashPoint) {
-          setMultiplier(crashPoint);
-          setMultiplierData((prev) => [...prev, crashPoint]);
-          setTimeData((prev) => [...prev, elapsed]);
-
-          // Mark losers
-          setLiveUsers((prev) =>
-            prev.map((u) =>
-              u.active
-                ? { ...u, multiplier: "-", profit: "-", active: false }
-                : u
-            )
-          );
-
-          if (betPlaced) {
-            if (useAutoCashout && autoCashout <= crashPoint) {
-              const win = (betAmount * autoCashout).toFixed(2);
-              setResult({ type: "win", amount: win });
-            } else if (!cashedOut) {
-              setResult({ type: "lose", amount: betAmount });
-            }
-          }
-
-          setRunning(false);
-          setShowCrash(crashPoint.toFixed(2));
-          setHistory([`${crashPoint.toFixed(2)}x`, ...history.slice(0, 6)]);
-
-          setTimeout(() => {
-            setShowCrash(null);
-            triggerCountdown();
-          }, 5000);
-          return;
-        }
-
-        setMultiplier(current);
-        setMultiplierData((prev) => [...prev, current]);
-        setTimeData((prev) => [...prev, elapsed]);
-
-        if (betPlaced && useAutoCashout && current >= autoCashout && !cashedOut) {
-          const win = (betAmount * autoCashout).toFixed(2);
-          setResult({ type: "win", amount: win });
-          setCashedOut(true);
-          setRunning(false);
-          setHistory([`${autoCashout.toFixed(2)}x`, ...history.slice(0, 6)]);
-          return;
-        }
-
-        animationFrame = requestAnimationFrame(animate);
-      };
-
-      animationFrame = requestAnimationFrame(animate);
-    }
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, [running, crashPoint, useAutoCashout, autoCashout, cashedOut, betPlaced, betAmount, history]);
-
-  // --- Auto start ---
-  useEffect(() => {
-    if (!running && countdown === null && !showCrash) {
-      triggerCountdown();
-    }
-  }, [running, countdown, showCrash]);
-
-  // --- Chart data ---
+  // Chart data
   const data = {
     datasets: [
       {
         label: "Multiplier",
-        data: timeData.map((t, i) => ({ x: t, y: multiplierData[i] })),
+        data: chartData, // FIX
         borderColor: showCrash ? "#FF0000" : "#FF5733",
         borderWidth: 2,
         tension: 0.25,
@@ -315,16 +263,16 @@ export default function CrashGame({ showControls = true }) {
       x: {
         type: "linear",
         title: { display: true, text: "Time (s)" },
-        ticks: { color: "white", stepSize: 3 },
+        ticks: { color: "white", stepSize: 1 },
         grid: { color: "rgba(255,255,255,0.15)" },
         min: 0,
-        suggestedMax: 12,
+        suggestedMax: 15,
       },
       y: {
         min: 1,
         ticks: {
           color: "white",
-          callback: (value) => (value % 1 === 0 ? value + "x" : ""),
+          callback: (value) => value + "x",
         },
         grid: { color: "rgba(255,255,255,0.15)" },
         suggestedMax: Math.ceil(multiplier) + 1,
@@ -332,24 +280,34 @@ export default function CrashGame({ showControls = true }) {
     },
   };
 
+  // Auto cashout helpers
+  const handleAutoCashoutChange = (e) => {
+    const v = e.target.value;
+    if (v === "") return setAutoCashout("");
+    if (/^\d*(?:\.\d{0,2})?$/.test(v)) {
+      setAutoCashout(v);
+    }
+  };
+  const handleAutoCashoutBlur = () => {
+    if (!autoCashout) return;
+    setAutoCashout(parseFloat(autoCashout).toFixed(2));
+  };
+
   return (
     <div className="flex flex-col items-center p-4 space-y-4 w-full text-white">
       {/* Chart */}
       <div className="relative w-full bg-black p-2 rounded shadow h-64 sm:h-80 md:h-[28rem] flex items-center justify-center">
         <Line data={data} options={options} />
-
         {running && multiplier >= 1 && !cashedOut && (
           <div className="absolute inset-0 flex items-center justify-center text-3xl sm:text-4xl md:text-5xl font-extrabold text-white pointer-events-none">
             {multiplier.toFixed(2)}x
           </div>
         )}
-
         {showCrash && (
           <div className="absolute inset-0 flex items-center justify-center text-5xl sm:text-6xl md:text-7xl font-extrabold text-red-500 animate-pulse pointer-events-none">
             💥 {showCrash}x
           </div>
         )}
-
         {countdown !== null && (
           <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl font-bold text-yellow-400 pointer-events-none">
             Next round in: {countdown}s
@@ -376,33 +334,37 @@ export default function CrashGame({ showControls = true }) {
           <div className="w-full flex flex-col items-center gap-2">
             <div className="flex items-end justify-between w-full max-w-3xl">
               <div className="w-24 hidden sm:block" />
-
               <div className="flex items-end gap-4 mx-auto flex-wrap sm:flex-nowrap justify-center">
+                {/* Bet Amount */}
                 <div className="flex flex-col">
                   <label className="block text-xs">Bet Amount</label>
                   <input
-                      type="number"
-                      step="0.01"
-                      value={autoCashout}
-                      onChange={(e) => {
-                        let val = e.target.value;
-                        if (val === "" || isNaN(val)) {
-                          setAutoCashout("");
-                        } else {
-                          const num = parseFloat(val).toFixed(2);
-                          setAutoCashout(num > 0 ? parseFloat(num) : 1.00); // default min 1.00
-                        }
-                      }}
-                      disabled={!useAutoCashout}
-                      className={`border p-1 rounded w-24 sm:w-24 md:w-28 text-center ${
-                        useAutoCashout
-                          ? "text-black"
-                          : "bg-gray-300 text-gray-500"
-                      }`}
-                    />
-
+                    type="number"
+                    value={betAmount || ""}
+                    onChange={(e) => setBetAmount(Number(e.target.value))}
+                    className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
+                    placeholder="Enter amount"
+                    min={10}
+                  />
                 </div>
 
+                {/* Auto Cash Out */}
+                <div className="flex flex-col">
+                  <label className="block text-xs">Auto Cash Out (x)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={autoCashout}
+                    onChange={handleAutoCashoutChange}
+                    onBlur={handleAutoCashoutBlur}
+                    disabled={!useAutoCashout}
+                    className={`border p-1 rounded w-24 sm:w-24 md:w-28 text-center ${
+                      useAutoCashout ? "text-black" : "bg-gray-300 text-gray-500"
+                    }`}
+                  />
+                </div>
+
+                {/* Place Bet / Withdraw */}
                 <div className="flex flex-col">
                   <button
                     className={`px-4 py-2 rounded-lg text-white font-semibold text-sm ${
@@ -428,6 +390,7 @@ export default function CrashGame({ showControls = true }) {
                 </div>
               </div>
 
+              {/* Toggle Auto */}
               <label className="flex flex-col items-center cursor-pointer select-none">
                 <span className="text-xs mb-1">Auto</span>
                 <div className="relative">
@@ -440,15 +403,14 @@ export default function CrashGame({ showControls = true }) {
                   <div className="block w-10 h-5 bg-gray-400 rounded-full" />
                   <div
                     className={`absolute left-1 top-0.5 w-4 h-4 rounded-full transition ${
-                      useAutoCashout
-                        ? "translate-x-5 bg-blue-500"
-                        : "bg-white"
+                      useAutoCashout ? "translate-x-5 bg-blue-500" : "bg-white"
                     }`}
                   />
                 </div>
               </label>
             </div>
 
+            {/* Messages */}
             <div className="flex flex-col items-center text-center mt-2 min-h-[20px]">
               {betError && (
                 <p className="text-red-400 text-xs font-bold animate-fadeout">
@@ -491,12 +453,18 @@ export default function CrashGame({ showControls = true }) {
 
       {/* Live Users */}
       <div className="w-full bg-gray-900 rounded p-2 mt-4 overflow-x-auto">
-        <h3 className="text-sm font-semibold mb-2">🔥 Live Users</h3>
-        <div className="min-w-full">
+        <h3 className="text-sm font-semibold mb-2">Live Users</h3>
+        <div className="min-w-[320px]">
+          <div className="grid grid-cols-4 text-xs font-bold border-b border-gray-700 pb-1 mb-1">
+            <span>User</span>
+            <span>Bet</span>
+            <span>Multiplier</span>
+            <span>Profit</span>
+          </div>
           {liveUsers.map((u, i) => (
             <div
               key={i}
-              className="flex justify-between text-xs border-b border-gray-700 py-1 min-w-[300px]"
+              className="grid grid-cols-4 text-xs border-b border-gray-800 py-0.5"
             >
               <span className="truncate max-w-[80px]">{u.user}</span>
               <span className="truncate max-w-[80px]">
@@ -510,7 +478,7 @@ export default function CrashGame({ showControls = true }) {
                     : "text-green-500 font-bold truncate max-w-[80px]"
                 }
               >
-                {u.profit === "-" ? "-" : `KES ${u.profit}`}
+                {u.profit}
               </span>
             </div>
           ))}

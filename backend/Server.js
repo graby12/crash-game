@@ -7,14 +7,14 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const http = require("http"); // Needed for Socket.IO
+const http = require("http");
 const { Server } = require("socket.io");
 
 // Models & routes
 const Register = require("./models/Register");
 const Bet = require("./models/Bet");
 const registerRoutes = require("./routes/register");
-const gamesRoutes = require("./routes/games"); // ✅ updated
+const gamesRoutes = require("./routes/games");
 const generateCrashMultiplier = require("./routes/random");
 
 const app = express();
@@ -62,18 +62,7 @@ mongoose
 
 // ---------- Mount Routes ----------
 app.use("/api/register", registerRoutes);
-app.use("/api/bet", gamesRoutes); // ✅ clean RESTful bet routes
-
-// ---------- Crash Multiplier Endpoint ----------
-app.get("/api/crash", (req, res) => {
-  try {
-    const crashMultiplier = generateCrashMultiplier();
-    res.json({ crashMultiplier: crashMultiplier });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to generate crash multiplier" });
-  }
-});
+app.use("/api/bet", gamesRoutes);
 
 // ---------- HELPER: Phone Normalization ----------
 function formatPhoneForMpesa(phone) {
@@ -270,6 +259,75 @@ io.on("connection", (socket) => {
     }
   });
 });
+
+// ---- Crash Game Engine ----
+let gameState = {
+  status: "waiting", // waiting | countdown | running | crashed
+  countdown: null,
+  crashPoint: null,
+  multiplier: 1,
+  startTime: null,
+  history: [],
+};
+
+function startCountdown() {
+  gameState.status = "countdown";
+  gameState.countdown = 5.0;
+  io.emit("countdown", gameState.countdown);
+
+  const countdownInterval = setInterval(() => {
+    gameState.countdown = parseFloat((gameState.countdown - 0.1).toFixed(1));
+    if (gameState.countdown <= 0) {
+      clearInterval(countdownInterval);
+      startRound();
+    } else {
+      io.emit("countdown", gameState.countdown);
+    }
+  }, 100);
+}
+
+function startRound() {
+  gameState.status = "running";
+  gameState.crashPoint = generateCrashMultiplier();
+  gameState.multiplier = 1;
+  gameState.startTime = Date.now();
+
+  io.emit("roundStarted", { crashPoint: gameState.crashPoint });
+
+  const growthRate = 0.18;
+
+  const loop = () => {
+    if (gameState.status !== "running") return;
+
+    const elapsed = (Date.now() - gameState.startTime) / 1000;
+    const current = Math.exp(growthRate * elapsed);
+
+    if (current >= gameState.crashPoint) {
+      gameState.status = "crashed";
+      gameState.multiplier = gameState.crashPoint;
+      gameState.history.unshift(`${gameState.crashPoint.toFixed(2)}x`);
+      gameState.history = gameState.history.slice(0, 20);
+
+      io.emit("roundEnded", {
+        crashPoint: gameState.crashPoint.toFixed(2),
+        history: gameState.history,
+      });
+
+      setTimeout(() => startCountdown(), 5000);
+      return;
+    }
+
+    gameState.multiplier = current;
+    io.emit("multiplierUpdate", { multiplier: current, elapsed });
+
+    setTimeout(loop, 50); // smoother updates
+  };
+
+  loop();
+}
+
+// Start first countdown when server boots
+startCountdown();
 
 // ---------- Start ----------
 const PORT = process.env.PORT || 5000;
