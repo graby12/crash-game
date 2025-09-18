@@ -88,16 +88,6 @@ export default function CrashGame({ showControls = true }) {
       console.error("❌ Socket connection error:", err.message);
     });
 
-    socket.on("countdown", (time) => {
-      setCountdown(time);
-      setRunning(false);
-      setMultiplier(1);
-      setChartData([{ x: 0, y: 1 }]);
-      setShowCrash(null);
-      setResult(null);
-      setCashedOut(false);
-    });
-
     socket.on("roundStarted", ({ crashPoint }) => {
       setCrashPoint(crashPoint);
       setRunning(true);
