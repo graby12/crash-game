@@ -32,13 +32,14 @@ export default function CrashGame({ showControls = true }) {
   const [multiplier, setMultiplier] = useState(1);
   const [crashPoint, setCrashPoint] = useState(null);
   const [running, setRunning] = useState(false);
+  const runningRef = useRef(running);
   const [cashedOut, setCashedOut] = useState(false);
   const [history, setHistory] = useState([]);
   const [betAmount, setBetAmount] = useState(0);
   const [useAutoCashout, setUseAutoCashout] = useState(false);
   const [autoCashout, setAutoCashout] = useState("");
   const [result, setResult] = useState(null);
-  const [chartData, setChartData] = useState([{ x: 0, y: 1 }]); // FIX
+  const [chartData, setChartData] = useState([{ x: 0, y: 1 }]);
   const [countdown, setCountdown] = useState(null);
   const [betPlaced, setBetPlaced] = useState(false);
   const [waitingForStart, setWaitingForStart] = useState(false);
@@ -50,6 +51,11 @@ export default function CrashGame({ showControls = true }) {
   const [generalError, setGeneralError] = useState("");
 
   const isLoggedIn = Boolean(localStorage.getItem("token"));
+
+  // keep runningRef in sync (used inside socket callbacks)
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
 
   // Auto-clear errors
   useEffect(() => {
@@ -67,13 +73,13 @@ export default function CrashGame({ showControls = true }) {
 
   // ---- SOCKET.IO EVENTS ----
   useEffect(() => {
-    // Wake server before opening socket
+    // Wake server before opening socket (helps on platforms that sleep)
     fetch("https://crash-game-sse3.onrender.com/").catch(() =>
       console.warn("Wake-up ping failed")
     );
 
     socketRef.current = io("https://crash-game-sse3.onrender.com", {
-      transports: ["websocket", "polling"], // FIX: allow fallback
+      transports: ["websocket", "polling"], // fallback allowed
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
@@ -88,28 +94,53 @@ export default function CrashGame({ showControls = true }) {
       console.error("❌ Socket connection error:", err.message);
     });
 
+    // COUNTDOWN: show countdown, reset UI/graph so graph doesn't run while countdown is visible
+    socket.on("countdown", (time) => {
+      setCountdown(time);
+      setRunning(false); // ensure graph is paused
+      setMultiplier(1);
+      setChartData([{ x: 0, y: 1 }]); // reset data
+      setShowCrash(null); // clear any previous crash overlay
+      setResult(null);
+      setCashedOut(false);
+    });
+
+    // ROUND STARTED: hide countdown, start the graph, reset data
     socket.on("roundStarted", ({ crashPoint }) => {
+      setCountdown(null); // hide "Next round in"
       setCrashPoint(crashPoint);
       setRunning(true);
       setMultiplier(1);
-      setChartData([{ x: 0, y: 1 }]);
-      setShowCrash(null);
-      setResult(null);
-      setCashedOut(false);
+      setChartData([{ x: 0, y: 1 }]); // fresh dataset for this round
+      setWaitingForStart(false);
+      // NOTE: keep betPlaced as-is (user may have an active bet)
+    });
+
+    // MULTIPLIER UPDATES (during running)
+    socket.on("multiplierUpdate", ({ multiplier: newMultiplier, elapsed }) => {
+      setMultiplier(newMultiplier);
+      // append to chart data — don't rely on `running` closure (server only emits when running),
+      // but we still check runningRef defensively
+      setChartData((prev) => {
+        // if for some reason we're not running, avoid appending
+        if (!runningRef.current) return prev;
+        // avoid duplicate identical points
+        const last = prev[prev.length - 1];
+        if (last && last.x === elapsed && last.y === newMultiplier) return prev;
+        return [...prev, { x: elapsed, y: newMultiplier }];
+      });
+    });
+
+    // ROUND ENDED: stop graph, show crash overlay, update history
+    socket.on("roundEnded", ({ crashPoint: cp, history }) => {
+      setRunning(false);
+      setShowCrash(cp);
+      setHistory(history.slice(-20));
+      setBetPlaced(false); // reset placed bet for next round
       setWaitingForStart(false);
     });
 
-    socket.on("multiplierUpdate", ({ multiplier, elapsed }) => {
-      setMultiplier(multiplier);
-      setChartData((prev) => [...prev, { x: elapsed, y: multiplier }]); // FIX
-    });
-
-    socket.on("roundEnded", ({ crashPoint, history }) => {
-      setRunning(false);
-      setShowCrash(crashPoint);
-      setHistory(history.slice(-20));
-    });
-
+    // balance updates for logged-in user
     socket.on("balanceUpdated", ({ userId, newBalance }) => {
       const myId = localStorage.getItem("userId");
       if (userId === myId) {
@@ -145,6 +176,7 @@ export default function CrashGame({ showControls = true }) {
     setBetError("");
     setGeneralError("");
 
+    // bets only allowed while countdown is active (server behavior)
     if (countdown === null) {
       setGeneralError("❌ You can only place bets during countdown!");
       return;
@@ -230,12 +262,12 @@ export default function CrashGame({ showControls = true }) {
     }
   };
 
-  // Chart data
+  // Chart data for react-chartjs-2
   const data = {
     datasets: [
       {
         label: "Multiplier",
-        data: chartData, // FIX
+        data: chartData,
         borderColor: showCrash ? "#FF0000" : "#FF5733",
         borderWidth: 2,
         tension: 0.25,
@@ -288,19 +320,23 @@ export default function CrashGame({ showControls = true }) {
       {/* Chart */}
       <div className="relative w-full bg-black p-2 rounded shadow h-64 sm:h-80 md:h-[28rem] flex items-center justify-center">
         <Line data={data} options={options} />
-        {running && multiplier >= 1 && !cashedOut && (
+
+        {/* Priority: countdown -> running multiplier -> crash overlay */}
+        {countdown !== null && (
+          <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl font-bold text-yellow-400 pointer-events-none">
+            Next round in: {typeof countdown === "number" ? countdown.toFixed(1) : countdown}s
+          </div>
+        )}
+
+        {!countdown && running && multiplier >= 1 && !cashedOut && (
           <div className="absolute inset-0 flex items-center justify-center text-3xl sm:text-4xl md:text-5xl font-extrabold text-white pointer-events-none">
             {multiplier.toFixed(2)}x
           </div>
         )}
-        {showCrash && (
+
+        {!countdown && !running && showCrash && (
           <div className="absolute inset-0 flex items-center justify-center text-5xl sm:text-6xl md:text-7xl font-extrabold text-red-500 animate-pulse pointer-events-none">
             💥 {showCrash}x
-          </div>
-        )}
-        {countdown !== null && (
-          <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl font-bold text-yellow-400 pointer-events-none">
-            Next round in: {countdown}s
           </div>
         )}
       </div>
@@ -426,20 +462,7 @@ export default function CrashGame({ showControls = true }) {
         ))}
 
       {/* History */}
-      <div className="flex space-x-1 flex-wrap justify-center">
-        {history.map((h, i) => (
-          <span
-            key={i}
-            className={`px-2 py-1 rounded text-xs font-bold ${
-              parseFloat(h) < 2
-                ? "bg-red-200 text-red-700"
-                : "bg-green-200 text-green-700"
-            }`}
-          >
-            {h}
-          </span>
-        ))}
-      </div>
+     
 
       {/* Live Users */}
       <div className="w-full bg-gray-900 rounded p-2 mt-4 overflow-x-auto">
