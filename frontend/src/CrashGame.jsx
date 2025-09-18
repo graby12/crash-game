@@ -1,4 +1,4 @@
-// CrashGame.jsx
+ // CrashGame.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   Chart as ChartJS,
@@ -462,7 +462,20 @@ export default function CrashGame({ showControls = true }) {
         ))}
 
       {/* History */}
-     
+      <div className="flex space-x-1 flex-wrap justify-center">
+        {history.map((h, i) => (
+          <span
+            key={i}
+            className={`px-2 py-1 rounded text-xs font-bold ${
+              parseFloat(h) < 2
+                ? "bg-red-200 text-red-700"
+                : "bg-green-200 text-green-700"
+            }`}
+          >
+            {h}
+          </span>
+        ))}
+      </div>
 
       {/* Live Users */}
       <div className="w-full bg-gray-900 rounded p-2 mt-4 overflow-x-auto">
@@ -499,4 +512,4 @@ export default function CrashGame({ showControls = true }) {
       </div>
     </div>
   );
-}
+}   
