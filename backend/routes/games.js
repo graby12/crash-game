@@ -26,16 +26,15 @@ function auth(req, res, next) {
   }
 }
 
-
 // ---------------- PLACE BET ----------------
 router.post("/bet", auth, async (req, res) => {
   try {
     const { amount, autoCashOut } = req.body;
 
-    if (!amount || amount < 300) {
+    if (!amount || amount < 10) {
       return res
         .status(400)
-        .json({ error: "Amount must be at least 300 to place a bet" });
+        .json({ error: "Amount must be at least 10 to place a bet" });
     }
 
     const user = await Register.findById(req.user.userId);
