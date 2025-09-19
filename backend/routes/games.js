@@ -37,7 +37,7 @@ router.post("/bet", auth, async (req, res) => {
         .json({ error: "Amount must be at least 10 to place a bet" });
     }
 
-    const user = await Register.findById(req.user.userId);
+    const user = await Register.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (user.balance < amount) {
