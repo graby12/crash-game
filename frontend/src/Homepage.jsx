@@ -22,6 +22,7 @@ const Homepage = () => {
   const [availableBalance, setAvailableBalance] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [multiplierData, setMultiplierData] = useState([]);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isDepositPopupOpen, setIsDepositPopupOpen] = useState(false);
@@ -36,7 +37,7 @@ const Homepage = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.get("https://crash-game-sse3.onrender.com/api/bet/balance", {
+      const res = await axios.get("https://crash-game-sse3.onrender.com/api/bet/bet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data?.balance !== undefined) setAvailableBalance(res.data.balance);
@@ -75,6 +76,29 @@ const Homepage = () => {
     });
 
     return () => socket.disconnect();
+  }, []);
+
+  // ---------------- FETCH CRASH MULTIPLIER ----------------
+  const fetchCrashMultiplier = async () => {
+    try {
+      const response = await axios.get('https://crash-game-sse3.onrender.com/api/crash');
+      const data = response.data;
+      const point = data?.crashPoint ?? data?.crashMultiplier ?? data?.crash ?? null;
+      if (point !== null && point !== undefined) {
+        setMultiplierData(prevData => {
+          const newData = [...prevData, parseFloat(point)];
+          return newData.slice(-20);
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching crash multiplier:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCrashMultiplier();
+    const interval = setInterval(fetchCrashMultiplier, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // ----------------- BET FUNCTION -----------------
@@ -163,16 +187,254 @@ const Homepage = () => {
   // ----------------- RENDER -----------------
   return (
     <div className="bg-gray-900 text-white min-h-screen flex flex-col">
-      {/* header, main, popups, footer same as your version */}
-      {/* ... */}
+      {/* Header */}
+      <header className="bg-gray-800 fixed top-0 w-full z-50">
+        {/* Desktop / Tablet Header */}
+        <div className="hidden sm:flex flex-col sm:flex-row items-center p-4">
+          <div className="text-lg sm:text-xl font-bold flex-1 text-center sm:text-left mb-2 sm:mb-0">
+            MONEY GRAPH
+          </div>
+          <div className="flex flex-col sm:flex-row sm:space-x-4 flex-1 justify-center text-sm sm:text-base mb-2 sm:mb-0">
+            <button onClick={handleWithdraw} className="hover:text-orange-500">WITHDRAW</button>
+            <button onClick={handleDeposit} className="hover:text-orange-500">DEPOSIT</button>
+            <button onClick={() => setIsTermsOpen(true)} className="hover:text-orange-500">TERMS OF SERVICE</button>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
+            <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">
+              KSH {availableBalance}
+            </span>
+            <span className="hidden sm:block">KKK5249201</span>
+            <button
+              onClick={handleLogOut}
+              className="bg-red-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg hover:bg-red-500 mt-2 sm:mt-0"
+            >
+              LOG OUT
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Header */}
+        <div className="sm:hidden flex items-center justify-between p-4 relative">
+          <button
+            className="text-white text-2xl"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            ☰
+          </button>
+
+          {/* ✅ Balance + Deposit only */}
+          <div className="flex flex-row items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
+            <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
+              KSH {availableBalance}
+            </span>
+            <button
+              onClick={handleDeposit}
+              className="px-3 py-1 bg-orange-600 rounded-md hover:bg-orange-500 text-white text-sm"
+            >
+              Deposit
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Drawer */}
+        {menuOpen && (
+          <div className="fixed top-0 left-0 h-full w-56 bg-gray-800 text-white shadow-lg z-50 sm:hidden">
+            <div className="flex justify-between items-center p-4 border-b border-gray-700">
+              <h2 className="font-semibold">Menu</h2>
+              <button
+                className="text-white text-xl"
+                onClick={() => setMenuOpen(false)}
+              >
+                ✖
+              </button>
+            </div>
+            <div className="flex flex-col">
+              <button onClick={() => { handleWithdraw(); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Withdraw</button>
+              <button onClick={() => { setIsTermsOpen(true); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Terms of Service</button>
+              <button onClick={() => { handleLogOut(); setMenuOpen(false); }} className="px-4 py-3 hover:bg-gray-700 text-left">Log Out</button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Main scrollable content */}
+      <main className="flex-1 overflow-y-auto pt-28 pb-12 px-4 sm:px-8">
+        <div className="w-full max-w-7xl mx-auto">
+          {/* Crash Game */}
+          <div className="w-full bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-xl sm:text-2xl text-center mb-4">Crash Game Multiplier</h2>
+            <CrashGame showControls={true}/>
+          </div>
+        </div>
+
+        {/* 🔥 Transaction Messages */}
+        <TransactionMessages />
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-orange-500 text-center py-2 sm:py-4 mt-6">
+        <p className="text-white text-sm sm:text-base">SPECIAL HAPPY HOUR DEAL!</p>
+        <p className="text-white text-xs sm:text-sm">PATA 10% YA LOSSES ZAKO ALL WEEK BETWEEN 8AM - 10AM</p>
+      </footer>
+
+      {/* Withdraw Popup */}
+      {isPopupOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg w-11/12 sm:w-2/3 md:w-1/3 space-y-4">
+            <h3 className="text-xl sm:text-2xl font-semibold text-center">Withholding Tax Notice</h3>
+            <p>
+              As provided for by the Income Tax Act, Cap 472, all gaming companies are required to
+              withhold winnings at a rate of 20%. Pakakumi will deduct and remit 20% of all winnings to KRA.
+            </p>
+            <div className="space-y-2">
+              <input type="number" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} placeholder="Enter withdrawal amount" />
+              {withdrawAmount < 300 && withdrawAmount !== '' && (
+                <p className="text-red-500 text-sm">Minimum withdrawal is KES 300</p>
+              )}
+            </div>
+            <div className="space-y-2 text-sm sm:text-base">
+              <div className="flex justify-between">
+                <span>Withholding Tax</span>
+                <span>{withdrawAmount ? (-(withdrawAmount * 0.2)).toFixed(2) : '-0'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Withdraw Fee</span>
+                <span>-16</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Disbursed Amount</span>
+                <span>{withdrawAmount ? (withdrawAmount - withdrawAmount * 0.2 - 16).toFixed(2) : '-0'}</span>
+              </div>
+            </div>
+            <div className="flex justify-between mt-4 space-x-2">
+              <button onClick={closePopup} className="bg-red-600 py-2 px-4 rounded-lg w-1/2">CLOSE</button>
+              <button onClick={confirmWithdraw} className="bg-blue-600 py-2 px-4 rounded-lg w-1/2">WITHDRAW</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deposit Popup */}
+      {isDepositPopupOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg w-11/12 sm:w-2/3 md:w-1/3 space-y-4">
+            <h3 className="text-xl sm:text-2xl font-semibold text-center">Deposit Funds</h3>
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <label>Phone Number</label>
+                <input type="text" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                  value={depositPhone} onChange={(e) => setDepositPhone(e.target.value)} placeholder="Enter phone number (07XXXXXXXX)" />
+              </div>
+              <div className="flex flex-col">
+                <label>Amount (KES)</label>
+                <input type="number" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
+                  value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Enter deposit amount" />
+                {depositAmount < 50 && depositAmount !== '' && (
+                  <p className="text-red-500 text-sm">Minimum deposit is KES 50</p>
+                )}
+              </div>
+            </div>
+            {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
+            {successMessage && <p className="text-green-500 text-sm">{successMessage}</p>}
+            <div className="flex justify-between mt-4 space-x-2">
+              <button onClick={closeDepositPopup} className="bg-red-600 py-2 px-4 rounded-lg w-1/2">CLOSE</button>
+              <button onClick={confirmDeposit} disabled={isDepositProcessing}
+                className={`bg-blue-600 py-2 px-4 rounded-lg w-1/2 ${isDepositProcessing ? "opacity-50 cursor-not-allowed" : ""}`}>
+                {isDepositProcessing ? "Processing..." : "DEPOSIT"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terms Modal */}
       <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
     </div>
   );
 };
 
-// 🔥 Transaction messages component (unchanged)
+// 🔥 Transaction messages component
 const TransactionMessages = () => {
-  // ... same as your version
+  const [message, setMessage] = useState("");
+  const [visible, setVisible] = useState(false);
+  const fadeInTimer = useRef(null);
+  const fadeOutTimer = useRef(null);
+  const intervalRef = useRef(null);
+
+  const randomId = () =>
+    "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
+
+  const randomAmount = () => {
+    const roll = Math.random();
+    if (roll < 0.7) return Math.random() * (5000 - 3000) + 3000;
+    if (roll < 0.8) return Math.random() * (40000 - 20000) + 20000;
+    return Math.random() * (15000 - 6000) + 6000;
+  };
+
+  const fmt = (n) =>
+    Number(n).toLocaleString("en-KE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const getFormattedDate = () => {
+    const now = new Date();
+    return now.toLocaleDateString("en-GB");
+  };
+
+  const randomTime = () => {
+    const now = new Date();
+    const pastHours = 1 + Math.floor(Math.random() * 2);
+    now.setHours(now.getHours() - pastHours);
+    return now.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  useEffect(() => {
+    const showOne = () => {
+      const amountVal = randomAmount();
+      const msg = `${randomId()} Confirmed. You have received Ksh${fmt(
+        amountVal
+      )} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
+
+      setMessage(msg);
+      setVisible(false);
+      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+
+      fadeInTimer.current = setTimeout(() => setVisible(true), 100);
+      fadeOutTimer.current = setTimeout(() => setVisible(false), 5000);
+    };
+
+    showOne();
+    intervalRef.current = setInterval(showOne, 7000);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
+      if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
+    };
+  }, []);
+
+  return (
+    <div className="h-24 relative mb-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: visible ? 1 : 0 }}
+        transition={{ duration: 0.5 }}
+        className="absolute inset-0 flex items-center justify-center text-xs sm:text-sm px-4 py-2 bg-green-600 rounded-lg shadow-md"
+        role="status"
+        aria-live="polite"
+      >
+        {message}
+      </motion.div>
+    </div>
+  );
 };
+
 
 export default Homepage;
