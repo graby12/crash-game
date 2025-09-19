@@ -27,7 +27,7 @@ function auth(req, res, next) {
 }
 
 // ---------------- PLACE BET ----------------
-router.post("/bet", auth, async (req, res) => {
+router.post("/", auth, async (req, res) => {
   try {
     const { amount, autoCashOut } = req.body;
 
