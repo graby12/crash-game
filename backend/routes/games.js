@@ -19,6 +19,8 @@ function auth(req, res, next) {
     console.log("✅ Decoded payload:", decoded);
 
     req.user = decoded;
+    req.userId = decoded.userId; // 🔥 add this line
+
     next();
   } catch (err) {
     console.error("❌ JWT verification failed:", err.message);

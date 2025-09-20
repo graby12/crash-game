@@ -37,7 +37,7 @@ const Homepage = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await axios.get("https://crash-game-sse3.onrender.com/api/bet/bet/balance", {
+      const res = await axios.get("https://crash-game-sse3.onrender.com/api/bet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data?.balance !== undefined) setAvailableBalance(res.data.balance);
