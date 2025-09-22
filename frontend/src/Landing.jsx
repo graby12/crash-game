@@ -20,6 +20,8 @@ const App = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  
+
   // Player stats
   const [playersOnline, setPlayersOnline] = useState(440);
   const [playersRegistered, setPlayersRegistered] = useState(2340);
@@ -73,12 +75,20 @@ const App = () => {
     }
   };
 
-  // REGISTER (no OTP required)
+  // REGISTER
   const handleRegister = async () => {
     setError("");
     setSuccess("");
     if (username.length < 5) {
       setError("Username must be at least 5 characters long");
+      return;
+    }
+    if (!otpSent) {
+      setError("Please send OTP first");
+      return;
+    }
+    if (otp.join("").length !== 4) {
+      setError("Enter the 4-digit OTP sent to your phone");
       return;
     }
     if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/.test(password)) {
@@ -90,7 +100,7 @@ const App = () => {
       return;
     }
 
-    const userData = { username, phoneNumber, password };
+    const userData = { username, phoneNumber, password, otp: otp.join("") };
     try {
       const response = await fetch(
         "https://crash-game-sse3.onrender.com/api/register",
@@ -104,6 +114,9 @@ const App = () => {
       if (response.ok) {
         setSuccess("Registration successful! You can now log in.");
         setIsLogin(true);
+        setOtp(["", "", "", ""]);
+        setOtpSent(false);
+        setOtpButtonDisabled(false);
         setPassword("");
         setConfirmPassword("");
       } else {
@@ -125,6 +138,10 @@ const App = () => {
     setIsModalOpen(false);
     setError("");
     setSuccess("");
+    setOtp(["", "", "", ""]);
+    setOtpSent(false);
+    setOtpButtonDisabled(false);
+    setOtpNoticeVisible(false);
   };
 
   return (
@@ -178,18 +195,56 @@ const App = () => {
               </div>
             )}
 
-            {/* Phone */}
+            {/* Phone + OTP */}
             <div className="mb-2">
               <label className="block text-gray-300 mb-1 text-sm">
                 Phone number
               </label>
-              <input
-                type="text"
-                placeholder="Enter phone number"
-                className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter phone number"
+                  className="flex-1 px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+                {!isLogin && (
+                  <button
+                    className={`px-2 py-2 rounded-md text-xs ${
+                      otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"
+                    } text-white`}
+                    onClick={handleSendOtp}
+                    disabled={otpButtonDisabled}
+                  >
+                    {otpButtonDisabled ? "Sent" : "Send OTP"}
+                  </button>
+                )}
+              </div>
+
+              {!isLogin && otpSent && (
+                <div className="mt-2">
+                  {otpNoticeVisible && (
+                    <p className="text-green-400 text-xs mb-2">OTP sent</p>
+                  )}
+                  <div
+                    className="flex gap-2 justify-center"
+                    onPaste={handleOtpPaste}
+                  >
+                    {otp.map((digit, index) => (
+                      <input
+                        key={index}
+                        type="text"
+                        maxLength="1"
+                        className="w-10 h-10 text-center text-lg rounded bg-gray-700 text-white"
+                        value={digit}
+                        onChange={(e) => handleOtpChange(e, index)}
+                        onKeyDown={(e) => handleOtpKeyDown(e, index)}
+                        ref={(el) => (otpInputsRef.current[index] = el)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Password */}
