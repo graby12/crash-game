@@ -20,13 +20,6 @@ const App = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // OTP
-  const [otp, setOtp] = useState(["", "", "", ""]);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpButtonDisabled, setOtpButtonDisabled] = useState(false);
-  const [otpNoticeVisible, setOtpNoticeVisible] = useState(false);
-  const otpInputsRef = useRef([]);
-
   // Player stats
   const [playersOnline, setPlayersOnline] = useState(440);
   const [playersRegistered, setPlayersRegistered] = useState(2340);
@@ -51,61 +44,6 @@ const App = () => {
       clearInterval(regInterval);
     };
   }, []);
-
-  // Send OTP
-  const handleSendOtp = async () => {
-    if (!phoneNumber) {
-      setError("Enter phone number first");
-      return;
-    }
-    try {
-      await axios.post(
-        "https://crash-game-sse3.onrender.com/api/register/send-otp",
-        { phoneNumber }
-      );
-      setOtpSent(true);
-      setOtpButtonDisabled(true);
-      setOtpNoticeVisible(true);
-      setSuccess("OTP sent");
-      setTimeout(() => {
-        if (otpInputsRef.current[0]) otpInputsRef.current[0].focus();
-      }, 50);
-    } catch {
-      setError("Failed to send OTP");
-    }
-  };
-
-  // OTP handling
-  const handleOtpChange = (e, index) => {
-    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 1);
-    const newOtp = [...otp];
-    newOtp[index] = val;
-    setOtp(newOtp);
-    if (val && index < 3) {
-      if (otpInputsRef.current[index + 1])
-        otpInputsRef.current[index + 1].focus();
-    }
-  };
-
-  const handleOtpKeyDown = (e, index) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      if (otpInputsRef.current[index - 1])
-        otpInputsRef.current[index - 1].focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    const paste = e.clipboardData
-      .getData("text")
-      .replace(/[^0-9]/g, "")
-      .slice(0, 4);
-    if (paste.length) {
-      const arr = paste.split("");
-      const filled = [arr[0] || "", arr[1] || "", arr[2] || "", arr[3] || ""];
-      setOtp(filled);
-    }
-    e.preventDefault();
-  };
 
   // LOGIN
   const handleLogin = async () => {
@@ -135,20 +73,12 @@ const App = () => {
     }
   };
 
-  // REGISTER
+  // REGISTER (no OTP required)
   const handleRegister = async () => {
     setError("");
     setSuccess("");
     if (username.length < 5) {
       setError("Username must be at least 5 characters long");
-      return;
-    }
-    if (!otpSent) {
-      setError("Please send OTP first");
-      return;
-    }
-    if (otp.join("").length !== 4) {
-      setError("Enter the 4-digit OTP sent to your phone");
       return;
     }
     if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/.test(password)) {
@@ -160,7 +90,7 @@ const App = () => {
       return;
     }
 
-    const userData = { username, phoneNumber, password, otp: otp.join("") };
+    const userData = { username, phoneNumber, password };
     try {
       const response = await fetch(
         "https://crash-game-sse3.onrender.com/api/register",
@@ -174,9 +104,6 @@ const App = () => {
       if (response.ok) {
         setSuccess("Registration successful! You can now log in.");
         setIsLogin(true);
-        setOtp(["", "", "", ""]);
-        setOtpSent(false);
-        setOtpButtonDisabled(false);
         setPassword("");
         setConfirmPassword("");
       } else {
@@ -198,10 +125,6 @@ const App = () => {
     setIsModalOpen(false);
     setError("");
     setSuccess("");
-    setOtp(["", "", "", ""]);
-    setOtpSent(false);
-    setOtpButtonDisabled(false);
-    setOtpNoticeVisible(false);
   };
 
   return (
@@ -255,56 +178,18 @@ const App = () => {
               </div>
             )}
 
-            {/* Phone + OTP */}
+            {/* Phone */}
             <div className="mb-2">
               <label className="block text-gray-300 mb-1 text-sm">
                 Phone number
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter phone number"
-                  className="flex-1 px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-                {!isLogin && (
-                  <button
-                    className={`px-2 py-2 rounded-md text-xs ${
-                      otpButtonDisabled ? "bg-gray-500" : "bg-blue-500"
-                    } text-white`}
-                    onClick={handleSendOtp}
-                    disabled={otpButtonDisabled}
-                  >
-                    {otpButtonDisabled ? "Sent" : "Send OTP"}
-                  </button>
-                )}
-              </div>
-
-              {!isLogin && otpSent && (
-                <div className="mt-2">
-                  {otpNoticeVisible && (
-                    <p className="text-green-400 text-xs mb-2">OTP sent</p>
-                  )}
-                  <div
-                    className="flex gap-2 justify-center"
-                    onPaste={handleOtpPaste}
-                  >
-                    {otp.map((digit, index) => (
-                      <input
-                        key={index}
-                        type="text"
-                        maxLength="1"
-                        className="w-10 h-10 text-center text-lg rounded bg-gray-700 text-white"
-                        value={digit}
-                        onChange={(e) => handleOtpChange(e, index)}
-                        onKeyDown={(e) => handleOtpKeyDown(e, index)}
-                        ref={(el) => (otpInputsRef.current[index] = el)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+              <input
+                type="text"
+                placeholder="Enter phone number"
+                className="w-full px-3 py-2 rounded-md bg-gray-700 text-white focus:outline-none text-sm"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
             </div>
 
             {/* Password */}

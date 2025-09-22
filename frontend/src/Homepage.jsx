@@ -38,7 +38,7 @@ const Homepage = () => {
       const token = localStorage.getItem("token");
       if (!token) return;
       const res = await axios.get("https://crash-game-sse3.onrender.com/api/bet/balance", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem(token)}` }
       });
       if (res.data?.balance !== undefined) setAvailableBalance(res.data.balance);
     } catch (err) {
@@ -76,29 +76,6 @@ const Homepage = () => {
     });
 
     return () => socket.disconnect();
-  }, []);
-
-  // ---------------- FETCH CRASH MULTIPLIER ----------------
-  const fetchCrashMultiplier = async () => {
-    try {
-      const response = await axios.get('https://crash-game-sse3.onrender.com/api/crash');
-      const data = response.data;
-      const point = data?.crashPoint ?? data?.crashMultiplier ?? data?.crash ?? null;
-      if (point !== null && point !== undefined) {
-        setMultiplierData(prevData => {
-          const newData = [...prevData, parseFloat(point)];
-          return newData.slice(-20);
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching crash multiplier:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchCrashMultiplier();
-    const interval = setInterval(fetchCrashMultiplier, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   // ----------------- BET FUNCTION -----------------
