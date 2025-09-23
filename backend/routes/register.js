@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 
 const router = express.Router();
 
-// Register user (no OTP required)
+// ✅ Register user (no OTP required)
 router.post("/", async (req, res) => {
   const { username, phoneNumber, password } = req.body;
 
@@ -32,7 +32,15 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Phone number already registered" });
     }
 
-    const newUser = new Register({ username, phoneNumber, password });
+    // ✅ Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new Register({
+      username,
+      phoneNumber,
+      password: hashedPassword,
+    });
+
     await newUser.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -42,7 +50,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Login
+// ✅ Login
 router.post("/login", async (req, res) => {
   const { phoneNumber, password } = req.body;
 
