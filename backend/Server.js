@@ -64,106 +64,105 @@ mongoose
 app.use("/api/register", registerRoutes);
 app.use("/api/bet", gamesRoutes);
 
-// ---------- HELPER: Phone Normalization ----------
-function formatPhoneForMpesa(phone) {
+// ---------- Phone Helpers (Airtel Uganda) ----------
+function formatPhoneForAirtel(phone) {
   phone = phone.toString().trim();
-  if (phone.startsWith("07")) return "254" + phone.substring(1);
-  if (phone.startsWith("+254")) return phone.replace("+", "");
-  if (phone.startsWith("254")) return phone;
+  if (phone.startsWith("0")) return "256" + phone.substring(1); // 070.. → 25670..
+  if (phone.startsWith("+256")) return phone.substring(1);
+  if (phone.startsWith("256")) return phone;
   return phone;
 }
-
 function formatPhoneForDB(phone) {
   phone = phone.toString().trim();
-  if (phone.startsWith("254")) return "0" + phone.substring(3);
-  if (phone.startsWith("+254")) return "0" + phone.substring(4);
+  if (phone.startsWith("256")) return "0" + phone.substring(3);
+  if (phone.startsWith("+256")) return "0" + phone.substring(4);
   return phone;
 }
 
-// ---------- STK PUSH DEPOSIT ----------
+// ---------- Airtel Token Helper ----------
+async function getAirtelToken() {
+  const res = await axios.post(
+    `${process.env.AIRTEL_BASE_URL}/auth/oauth2/token`,
+    {
+      client_id: process.env.AIRTEL_CLIENT_ID,
+      client_secret: process.env.AIRTEL_CLIENT_SECRET,
+      grant_type: "client_credentials",
+    },
+    { headers: { "Content-Type": "application/json" } }
+  );
+  return res.data.access_token;
+}
+
+// ---------- Airtel Deposit ----------
 app.post("/api/deposit", authMiddleware, async (req, res) => {
   try {
     const { phoneNumber, amount } = req.body;
-    if (!phoneNumber || !amount || amount <= 0)
+    if (!phoneNumber || !amount || amount <= 0) {
       return res.status(400).json({ error: "Phone & valid amount required" });
+    }
 
     const user = await Register.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const auth = Buffer.from(
-      `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
-    ).toString("base64");
+    const phone = formatPhoneForAirtel(phoneNumber);
+    const accessToken = await getAirtelToken();
+    const txnId = "TXN" + Date.now();
 
-    const tokenResponse = await axios.get(
-      process.env.MPESA_ENV === "sandbox"
-        ? "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
-        : "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-      { headers: { Authorization: `Basic ${auth}` } }
-    );
-
-    const accessToken = tokenResponse.data.access_token;
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:TZ.]/g, "")
-      .slice(0, 14);
-    const password = Buffer.from(
-      `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
-    ).toString("base64");
-    const phone = formatPhoneForMpesa(phoneNumber);
-
-    const stkResponse = await axios.post(
-      process.env.MPESA_ENV === "sandbox"
-        ? "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
-        : "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+    const paymentRes = await axios.post(
+      `${process.env.AIRTEL_BASE_URL}/merchant/v1/payments/`,
       {
-        BusinessShortCode: process.env.MPESA_SHORTCODE,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: "CustomerPayBillOnline",
-        Amount: amount,
-        PartyA: phone,
-        PartyB: process.env.MPESA_SHORTCODE,
-        PhoneNumber: phone,
-        CallBackURL: process.env.MPESA_CALLBACK_URL,
-        AccountReference: "MONEY_GAME",
-        TransactionDesc: "Deposit to Money Game",
+        reference: txnId,
+        subscriber: {
+          country: process.env.AIRTEL_COUNTRY || "UG",
+          currency: process.env.AIRTEL_CURRENCY || "UGX",
+          msisdn: phone,
+        },
+        transaction: {
+          amount: amount,
+          country: process.env.AIRTEL_COUNTRY || "UG",
+          currency: process.env.AIRTEL_CURRENCY || "UGX",
+          id: txnId,
+        },
       },
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "X-Country": process.env.AIRTEL_COUNTRY || "UG",
+          "X-Currency": process.env.AIRTEL_CURRENCY || "UGX",
+          "Content-Type": "application/json",
+        },
+      }
     );
 
-    res.json({ message: "STK Push sent", data: stkResponse.data });
+    res.json({
+      message: "Airtel Money deposit initiated",
+      data: paymentRes.data,
+    });
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: "STK Push failed" });
+    console.error(
+      "❌ Airtel deposit error:",
+      err.response?.data || err.message
+    );
+    res.status(500).json({ error: "Deposit failed" });
   }
 });
 
-// ---------- STK CALLBACK ----------
-app.post("/api/stk-callback", async (req, res) => {
+// ---------- Airtel Callback ----------
+app.post("/api/airtel-callback", async (req, res) => {
   try {
-    const callbackData = req.body;
-    const result = callbackData?.Body?.stkCallback;
-    if (!result)
+    console.log("📩 Airtel Callback:", JSON.stringify(req.body));
+    const { data } = req.body;
+    if (!data || !data.transaction) {
       return res.status(400).json({ error: "Invalid callback data" });
+    }
 
-    const { ResultCode, CallbackMetadata } = result;
-
-    if (ResultCode === 0) {
-      const items = CallbackMetadata?.Item;
-      const amountItem = items.find((i) => i.Name === "Amount");
-      const phoneItem = items.find((i) => i.Name === "PhoneNumber");
-
-      const amount = amountItem?.Value || 0;
-      let phoneNumber = phoneItem?.Value?.toString();
-      phoneNumber = formatPhoneForDB(phoneNumber);
-
+    const { status, amount, msisdn } = data.transaction;
+    if (status === "SUCCESSFUL") {
+      const phoneNumber = formatPhoneForDB(msisdn);
       const user = await Register.findOne({ phoneNumber });
-      if (!user) {
-        console.warn("STK callback: user not found for phone", phoneNumber);
-        return res.status(404).json({ error: "User not found" });
-      }
+      if (!user) return res.status(404).json({ error: "User not found" });
 
-      user.balance += amount;
+      user.balance += parseFloat(amount);
       await user.save();
 
       io.emit("balanceUpdated", {
@@ -181,17 +180,17 @@ app.post("/api/stk-callback", async (req, res) => {
 
       console.log(`✅ Deposit of ${amount} successful for ${phoneNumber}`);
     } else {
-      console.log(`❌ STK Push failed or cancelled. ResultCode: ${ResultCode}`);
+      console.log(`❌ Airtel payment failed. Status: ${status}`);
     }
 
-    return res.status(200).json({ message: "Callback received" });
+    res.status(200).json({ message: "Callback received" });
   } catch (err) {
-    console.error("STK callback processing failed:", err.message);
-    return res.status(500).json({ error: "Callback processing failed" });
+    console.error("❌ Callback error:", err.message);
+    res.status(500).json({ error: "Callback processing failed" });
   }
 });
 
-// ---------- BALANCE CHECK ----------
+// ---------- Balance Check ----------
 app.get("/api/balance", authMiddleware, async (req, res) => {
   try {
     const user = await Register.findById(req.userId);
@@ -206,7 +205,6 @@ app.get("/api/balance", authMiddleware, async (req, res) => {
 app.get("/api/live-users", async (req, res) => {
   try {
     const users = await Register.find().sort({ createdAt: -1 }).limit(10);
-
     const liveUsers = users.map((user) => {
       const didBet = Math.random() > 0.5;
       if (!didBet) {
@@ -227,7 +225,6 @@ app.get("/api/live-users", async (req, res) => {
         profit,
       };
     });
-
     res.status(200).json(liveUsers);
   } catch (err) {
     console.error(err);
@@ -241,13 +238,11 @@ app.get("/", (req, res) => res.send("Backend server is running!"));
 // ---------- Socket.IO ----------
 io.on("connection", (socket) => {
   console.log("🟢 User connected (socket):", socket.id);
-
   socket.on("registerUser", (userId) => {
     if (!userId) return;
     onlineUsers.set(userId, socket.id);
     console.log(`📡 Registered user ${userId} -> socket ${socket.id}`);
   });
-
   socket.on("disconnect", () => {
     console.log("🔴 Socket disconnected:", socket.id);
     for (const [userId, sockId] of onlineUsers.entries()) {
@@ -262,7 +257,7 @@ io.on("connection", (socket) => {
 
 // ---- Crash Game Engine ----
 let gameState = {
-  status: "waiting", // waiting | countdown | running | crashed
+  status: "waiting",
   countdown: null,
   crashPoint: null,
   multiplier: 1,
@@ -293,12 +288,10 @@ function startRound() {
   gameState.startTime = Date.now();
 
   io.emit("roundStarted", { crashPoint: gameState.crashPoint });
-
   const growthRate = 0.18;
 
   const loop = () => {
     if (gameState.status !== "running") return;
-
     const elapsed = (Date.now() - gameState.startTime) / 1000;
     const current = Math.exp(growthRate * elapsed);
 
@@ -319,32 +312,15 @@ function startRound() {
 
     gameState.multiplier = current;
     io.emit("multiplierUpdate", { multiplier: current, elapsed });
-
-    setTimeout(loop, 50); // smoother updates
+    setTimeout(loop, 50);
   };
 
   loop();
 }
-
-// Start first countdown when server boots
 startCountdown();
 
-// ---------- Render Public IP Check ----------
-app.get("/my-ip", async (req, res) => {
-  try {
-    const { data } = await axios.get("https://api.ipify.org?format=json");
-    res.json({
-      render_ip: data.ip,
-      note: "This is the public outbound IP your Render app is using",
-    });
-  } catch (err) {
-    console.error("❌ Failed to fetch Render IP:", err.message);
-    res.status(500).json({ error: "Failed to fetch Render IP" });
-  }
-});
-
 // ---------- Start Server ----------
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
+const PORT = process.env.PORT;
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

@@ -19,7 +19,7 @@ function auth(req, res, next) {
     console.log("✅ Decoded payload:", decoded);
 
     req.user = decoded;
-    req.userId = decoded.userId; // 🔥 add this line
+    req.userId = decoded.userId;
 
     next();
   } catch (err) {
@@ -46,15 +46,13 @@ router.post("/bet", auth, async (req, res) => {
       return res.status(400).json({ error: "Insufficient balance" });
     }
 
-    // Deduct stake
     user.balance -= amount;
     await user.save();
 
-    // Save bet
     const bet = new Bet({
       userId: user._id,
       amount,
-      autoCashOut: autoCashOut && autoCashOut >= 2 ? autoCashOut : null, // optional
+      autoCashOut: autoCashOut && autoCashOut >= 2 ? autoCashOut : null,
       status: "pending",
     });
     await bet.save();
@@ -80,7 +78,7 @@ router.post("/bet/cashout", auth, async (req, res) => {
       return res.status(400).json({ error: "Invalid or already settled bet" });
     }
 
-    const autoCashOut = bet.autoCashOut || 2; // default to 2x if not set
+    const autoCashOut = bet.autoCashOut || 2;
     let profit = 0;
 
     if (crashMultiplier >= autoCashOut) {
@@ -110,29 +108,44 @@ router.post("/bet/cashout", auth, async (req, res) => {
 });
 
 // ---------------- HELPER: Phone Normalization ----------------
-function formatPhoneForMpesa(phone) {
+function formatPhoneForAirtel(phone) {
   phone = phone.toString().trim();
-  if (phone.startsWith("07") || phone.startsWith("01")) {
-    return "254" + phone.substring(1);
-  } else if (phone.startsWith("+254")) {
-    return phone.replace("+", "");
-  } else if (phone.startsWith("254")) {
-    return phone;
+  if (phone.startsWith("0")) {
+    return "256" + phone.substring(1); // e.g., 0701234567 → 256701234567
+  }
+  if (phone.startsWith("+256")) {
+    return phone.substring(1); // remove +
   }
   return phone;
 }
 
 function formatPhoneForDB(phone) {
+  // Store locally in 07… format for consistency
   phone = phone.toString().trim();
-  if (phone.startsWith("254")) {
-    return "0" + phone.substring(3);
-  } else if (phone.startsWith("+254")) {
+  if (phone.startsWith("256")) {
+    return "0" + phone.substring(3); // 256701234567 → 0701234567
+  } else if (phone.startsWith("+256")) {
     return "0" + phone.substring(4);
   }
   return phone;
 }
 
-// ---------------- STK PUSH DEPOSIT ----------------
+// ---------------- AIRTEL TOKEN HELPER ----------------
+async function getAirtelToken() {
+  const res = await axios.post(
+    `${process.env.AIRTEL_BASE_URL}/auth/oauth2/token`,
+    {
+      client_id: process.env.AIRTEL_CLIENT_ID,
+      client_secret: process.env.AIRTEL_CLIENT_SECRET,
+      grant_type: "client_credentials",
+    },
+    { headers: { "Content-Type": "application/json" } }
+  );
+
+  return res.data.access_token;
+}
+
+// ---------------- AIRTEL DEPOSIT ----------------
 router.post("/deposit", auth, async (req, res) => {
   try {
     const { phoneNumber, amount } = req.body;
@@ -143,85 +156,73 @@ router.post("/deposit", auth, async (req, res) => {
     const user = await Register.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const phone = formatPhoneForMpesa(phoneNumber);
+    const phone = formatPhoneForAirtel(phoneNumber);
+    const accessToken = await getAirtelToken();
 
-    // Get MPESA Access Token
-    const authHeader = Buffer.from(
-      `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
-    ).toString("base64");
+    const txnId = "TXN" + Date.now();
 
-    const tokenResponse = await axios.get(
-      process.env.MPESA_ENV === "sandbox"
-        ? "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
-        : "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-      { headers: { Authorization: `Basic ${authHeader}` } }
-    );
-
-    const accessToken = tokenResponse.data.access_token;
-
-    // Prepare STK Push
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:TZ.]/g, "")
-      .slice(0, 14);
-    const password = Buffer.from(
-      `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
-    ).toString("base64");
-
-    const stkResponse = await axios.post(
-      process.env.MPESA_ENV === "sandbox"
-        ? "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
-        : "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+    const paymentRes = await axios.post(
+      `${process.env.AIRTEL_BASE_URL}/merchant/v1/payments/`,
       {
-        BusinessShortCode: process.env.MPESA_SHORTCODE,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: "CustomerPayBillOnline",
-        Amount: amount,
-        PartyA: phone,
-        PartyB: process.env.MPESA_SHORTCODE,
-        PhoneNumber: phone,
-        CallBackURL: process.env.MPESA_CALLBACK_URL,
-        AccountReference: "MONEY_GAME",
-        TransactionDesc: "Deposit to Money Game",
+        reference: txnId,
+        subscriber: {
+          country: process.env.AIRTEL_COUNTRY || "UG",
+          currency: process.env.AIRTEL_CURRENCY || "UGX",
+          msisdn: phone,
+        },
+        transaction: {
+          amount: amount,
+          country: process.env.AIRTEL_COUNTRY || "UG",
+          currency: process.env.AIRTEL_CURRENCY || "UGX",
+          id: txnId,
+        },
       },
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "X-Country": process.env.AIRTEL_COUNTRY || "UG",
+          "X-Currency": process.env.AIRTEL_CURRENCY || "UGX",
+          "Content-Type": "application/json",
+        },
+      }
     );
 
-    res.json({ message: "STK Push sent", data: stkResponse.data });
+    res.json({
+      message: "Airtel Money deposit initiated",
+      data: paymentRes.data,
+    });
   } catch (err) {
-    console.error("❌ STK push error:", err.response?.data || err.message);
-    res.status(500).json({ error: "STK Push failed" });
+    console.error(
+      "❌ Airtel deposit error:",
+      err.response?.data || err.message
+    );
+    res.status(500).json({ error: "Deposit failed" });
   }
 });
 
-// ---------------- STK CALLBACK ----------------
-router.post("/stk-callback", async (req, res) => {
+// ---------------- AIRTEL CALLBACK ----------------
+router.post("/airtel-callback", async (req, res) => {
   try {
-    const result = req.body?.Body?.stkCallback;
-    if (!result)
+    console.log("📩 Airtel Callback:", JSON.stringify(req.body));
+
+    const { data } = req.body;
+    if (!data || !data.transaction) {
       return res.status(400).json({ error: "Invalid callback data" });
+    }
 
-    const { ResultCode, CallbackMetadata } = result;
-
-    if (ResultCode === 0) {
-      const items = CallbackMetadata?.Item || [];
-      const amountItem = items.find((i) => i.Name === "Amount");
-      const phoneItem = items.find((i) => i.Name === "PhoneNumber");
-
-      const amount = amountItem?.Value || 0;
-      let phoneNumber = phoneItem?.Value?.toString();
-      phoneNumber = formatPhoneForDB(phoneNumber);
-
+    const { status, amount, msisdn } = data.transaction;
+    if (status === "SUCCESSFUL") {
+      const phoneNumber = formatPhoneForDB(msisdn);
       const user = await Register.findOne({ phoneNumber });
+
       if (!user) return res.status(404).json({ error: "User not found" });
 
-      user.balance += amount;
+      user.balance += parseFloat(amount);
       await user.save();
 
       console.log(`✅ Deposit of ${amount} successful for ${phoneNumber}`);
     } else {
-      console.log(`❌ STK Push failed or cancelled. ResultCode: ${ResultCode}`);
+      console.log(`❌ Airtel payment failed. Status: ${status}`);
     }
 
     res.status(200).json({ message: "Callback received" });
