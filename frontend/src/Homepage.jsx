@@ -332,6 +332,7 @@ const Homepage = () => {
 };
 
 // 🔥 Transaction messages component
+// Transaction messages
 const TransactionMessages = () => {
   const [message, setMessage] = useState("");
   const [visible, setVisible] = useState(false);
@@ -339,31 +340,41 @@ const TransactionMessages = () => {
   const fadeOutTimer = useRef(null);
   const intervalRef = useRef(null);
 
-  const randomId = () =>
-    "TI" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  // Generate random TID (12-digit number)
+  const randomTid = () => {
+    return Math.floor(100000000000 + Math.random() * 900000000000).toString();
+  };
 
+  // Generate random amount with given distribution
   const randomAmount = () => {
     const roll = Math.random();
-    if (roll < 0.7) return Math.random() * (5000 - 3000) + 3000;
-    if (roll < 0.8) return Math.random() * (40000 - 20000) + 20000;
-    return Math.random() * (15000 - 6000) + 6000;
+    if (roll < 0.2) {
+      // 20% chance
+      return Math.floor(Math.random() * (100000 - 20000 + 1)) + 20000;
+    } else if (roll < 0.5) {
+      // 30% chance
+      return Math.floor(Math.random() * (450000 - 100000 + 1)) + 100000;
+    } else {
+      // 50% chance
+      return Math.floor(Math.random() * (1200000 - 450000 + 1)) + 450000;
+    }
   };
 
   const fmt = (n) =>
-    Number(n).toLocaleString("en-KE", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    Number(n).toLocaleString("en-UG", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     });
 
   const getFormattedDate = () => {
     const now = new Date();
-    return now.toLocaleDateString("en-GB");
+    return now.toLocaleDateString("en-GB"); // dd/mm/yyyy
   };
 
   const randomTime = () => {
     const now = new Date();
-    const pastHours = 1 + Math.floor(Math.random() * 2);
-    now.setHours(now.getHours() - pastHours);
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
     return now.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
@@ -373,13 +384,13 @@ const TransactionMessages = () => {
 
   useEffect(() => {
     const showOne = () => {
-      const amountVal = randomAmount();
-      const msg = `${randomId()} Confirmed. You have received Ksh${fmt(
-        amountVal
-      )} from MONEY GRAPH on ${getFormattedDate()} at ${randomTime()}. Separate personal and business funds through Pochi la Biashara on *334#`;
+      const tid = randomTid();
+      const amount = randomAmount();
+      const msg = `RECEIVED. TID ${tid}. UGX ${fmt(amount)} from Money Graph on ${getFormattedDate()} at ${randomTime()}. View txns on MyAirtel App https://bit.ly/3ZgpiNw`;
 
       setMessage(msg);
       setVisible(false);
+
       if (fadeInTimer.current) clearTimeout(fadeInTimer.current);
       if (fadeOutTimer.current) clearTimeout(fadeOutTimer.current);
 
@@ -412,6 +423,7 @@ const TransactionMessages = () => {
     </div>
   );
 };
+
 
 
 export default Homepage;

@@ -1,4 +1,4 @@
- // CrashGame.jsx
+// CrashGame.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   Chart as ChartJS,
@@ -52,7 +52,7 @@ export default function CrashGame({ showControls = true }) {
 
   const isLoggedIn = Boolean(localStorage.getItem("token"));
 
-  // keep runningRef in sync (used inside socket callbacks)
+  // keep runningRef in sync
   useEffect(() => {
     runningRef.current = running;
   }, [running]);
@@ -72,118 +72,169 @@ export default function CrashGame({ showControls = true }) {
   }, [generalError]);
 
   // ---- SOCKET.IO EVENTS ----
-  useEffect(() => {
-    // Wake server before opening socket (helps on platforms that sleep)
-    fetch("https://crash-game-sse3.onrender.com/").catch(() =>
-      console.warn("Wake-up ping failed")
-    );
+ // ---- SOCKET.IO EVENTS ----
+useEffect(() => {
+  fetch("https://crash-game-sse3.onrender.com/").catch(() =>
+    console.warn("Wake-up ping failed")
+  );
 
-    socketRef.current = io("https://crash-game-sse3.onrender.com", {
-      transports: ["websocket", "polling"], // fallback allowed
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  socketRef.current = io("https://crash-game-sse3.onrender.com", {
+    transports: ["websocket", "polling"],
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
 
-    const socket = socketRef.current;
+  const socket = socketRef.current;
 
-    socket.on("connect", () => {
-      console.log("🟢 Connected to WebSocket");
-    });
+  socket.on("connect", () => {
+    console.log("🟢 Connected to WebSocket");
+  });
 
-    socket.on("connect_error", (err) => {
-      console.error("❌ Socket connection error:", err.message);
-    });
+  socket.on("connect_error", (err) => {
+    console.error("❌ Socket connection error:", err.message);
+  });
 
-    // COUNTDOWN: show countdown, reset UI/graph so graph doesn't run while countdown is visible
-    socket.on("countdown", (time) => {
-      setCountdown(time);
-      setRunning(false); // ensure graph is paused
-      setMultiplier(1);
-      setChartData([{ x: 0, y: 1 }]); // reset data
-      setShowCrash(null); // clear any previous crash overlay
-      setResult(null);
-      setCashedOut(false);
-    });
+  socket.on("countdown", (time) => {
+    setCountdown(time);
+    setRunning(false);
+    setMultiplier(1);
+    setChartData([{ x: 0, y: 1 }]);
+    setShowCrash(null);
+    setResult(null);
+    setCashedOut(false);
+    setLiveUsers([]); // clear users during countdown
+  });
 
-    // ROUND STARTED: hide countdown, start the graph, reset data
-    socket.on("roundStarted", ({ crashPoint }) => {
-      setCountdown(null); // hide "Next round in"
-      setCrashPoint(crashPoint);
-      setRunning(true);
-      setMultiplier(1);
-      setChartData([{ x: 0, y: 1 }]); // fresh dataset for this round
-      setWaitingForStart(false);
-      // NOTE: keep betPlaced as-is (user may have an active bet)
-    });
+  socket.on("roundStarted", async ({ crashPoint }) => {
+    setCountdown(null);
+    setCrashPoint(crashPoint);
+    setRunning(true);
+    setMultiplier(1);
+    setChartData([{ x: 0, y: 1 }]);
+    setWaitingForStart(false);
 
-    // MULTIPLIER UPDATES (during running)
-    socket.on("multiplierUpdate", ({ multiplier: newMultiplier, elapsed }) => {
-      setMultiplier(newMultiplier);
-      // append to chart data — don't rely on `running` closure (server only emits when running),
-      // but we still check runningRef defensively
-      setChartData((prev) => {
-        // if for some reason we're not running, avoid appending
-        if (!runningRef.current) return prev;
-        // avoid duplicate identical points
-        const last = prev[prev.length - 1];
-        if (last && last.x === elapsed && last.y === newMultiplier) return prev;
-        return [...prev, { x: elapsed, y: newMultiplier }];
-      });
-    });
-
-    // ROUND ENDED: stop graph, show crash overlay, update history
-    socket.on("roundEnded", ({ crashPoint: cp, history }) => {
-      setRunning(false);
-      setShowCrash(cp);
-      setHistory(history.slice(-20));
-      setBetPlaced(false); // reset placed bet for next round
-      setWaitingForStart(false);
-    });
-
-    // balance updates for logged-in user
-    socket.on("balanceUpdated", ({ userId, newBalance }) => {
-      const myId = localStorage.getItem("userId");
-      if (userId === myId) {
-        setAvailableBalance(newBalance);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  // ---- Fetch live users ----
-  const fetchLiveUsers = async () => {
     try {
-      const res = await fetch(
-        "https://crash-game-sse3.onrender.com/api/live-users"
-      );
-      const data = await res.json();
-      setLiveUsers(data);
+      // ✅ Fetch real users from backend
+      const res = await fetch("https://crash-game-sse3.onrender.com/api/live-users");
+      const users = await res.json();
+
+      // ✅ Keep the exact same logic, only replace names
+      let players = users.map((u, i) => {
+        const bet = randomAmountUGX();
+        const target = parseFloat(
+          (Math.random() * (Math.min(crashPoint, 10) - 1.1) + 1.1).toFixed(2)
+        );
+        return {
+          user: u.username || u.user || `User${i + 1}`, // real username
+          amount: bet,
+          target,
+          multiplier: "-",
+          profit: "-",
+          cashedOut: false,
+        };
+      });
+
+      // choose 45–75% to be winners
+      const winRate = Math.random() * 0.3 + 0.45;
+      const winnersCount = Math.floor(players.length * winRate);
+      const shuffled = [...players].sort(() => Math.random() - 0.5);
+      const winners = new Set(shuffled.slice(0, winnersCount).map((p) => p.user));
+
+      players = players.map((p) => ({
+        ...p,
+        willWin: winners.has(p.user),
+      }));
+
+      setLiveUsers(players);
     } catch (err) {
-      console.error("Error fetching live users:", err);
+      console.error("❌ Error fetching live users:", err);
+      setLiveUsers([]);
+    }
+  });
+
+  socket.on("multiplierUpdate", ({ multiplier: newMultiplier, elapsed }) => {
+    setMultiplier(newMultiplier);
+    setChartData((prev) => {
+      if (!runningRef.current) return prev;
+      const last = prev[prev.length - 1];
+      if (last && last.x === elapsed && last.y === newMultiplier) return prev;
+      return [...prev, { x: elapsed, y: newMultiplier }];
+    });
+
+    // update live users in real time
+    setLiveUsers((prev) =>
+      prev.map((u) => {
+        if (!u.willWin || u.cashedOut || u.profit !== "-") return u;
+        if (newMultiplier >= u.target) {
+          return {
+            ...u,
+            multiplier: u.target,
+            profit: Math.floor(u.amount * (u.target - 1)),
+            cashedOut: true,
+          };
+        }
+        return u; // still waiting
+      })
+    );
+  });
+
+  socket.on("roundEnded", ({ crashPoint: cp, history }) => {
+    setRunning(false);
+    setShowCrash(cp);
+    setHistory(history.slice(-20));
+    setBetPlaced(false);
+    setWaitingForStart(false);
+
+    // resolve losers
+    setLiveUsers((prev) =>
+      prev.map((u) => {
+        if (u.cashedOut) return u;
+        return {
+          ...u,
+          profit: -u.amount,
+          multiplier: "-", // losers never show multiplier
+        };
+      })
+    );
+  });
+
+  socket.on("balanceUpdated", ({ userId, newBalance }) => {
+    const myId = localStorage.getItem("userId");
+    if (userId === myId) {
+      setAvailableBalance(newBalance);
+    }
+  });
+
+  return () => {
+    socket.disconnect();
+  };
+}, []);
+
+
+  // ---- helper: random bet ----
+  const randomAmountUGX = () => {
+    const roll = Math.random();
+    if (roll < 0.2) {
+      return Math.floor(Math.random() * (100000 - 20000 + 1)) + 20000;
+    } else if (roll < 0.5) {
+      return Math.floor(Math.random() * (450000 - 100000 + 1)) + 100000;
+    } else {
+      return Math.floor(Math.random() * (1200000 - 450000 + 1)) + 450000;
     }
   };
-  useEffect(() => {
-    fetchLiveUsers();
-    const interval = setInterval(fetchLiveUsers, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   // ---- Place bet ----
   const handlePlaceBet = async () => {
     setBetError("");
     setGeneralError("");
 
-    // bets only allowed while countdown is active (server behavior)
     if (countdown === null) {
       setGeneralError("❌ You can only place bets during countdown!");
       return;
     }
 
-    if (!betAmount || betAmount < 10) {
-      setBetError("❌ Minimum bet is 10");
+    if (!betAmount || betAmount < 100) {
+      setBetError("❌ Minimum bet is UGX 100");
       return;
     }
 
@@ -262,7 +313,7 @@ export default function CrashGame({ showControls = true }) {
     }
   };
 
-  // Chart data for react-chartjs-2
+  // Chart data
   const data = {
     datasets: [
       {
@@ -321,14 +372,14 @@ export default function CrashGame({ showControls = true }) {
       <div className="relative w-full bg-black p-2 rounded shadow h-64 sm:h-80 md:h-[28rem] flex items-center justify-center">
         <Line data={data} options={options} />
 
-        {/* Priority: countdown -> running multiplier -> crash overlay */}
         {countdown !== null && (
           <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl font-bold text-yellow-400 pointer-events-none">
-            Next round in: {typeof countdown === "number" ? countdown.toFixed(1) : countdown}s
+            Next round in:{" "}
+            {typeof countdown === "number" ? countdown.toFixed(1) : countdown}s
           </div>
         )}
 
-        {!countdown && running && multiplier >= 1 && !cashedOut && (
+        {running && multiplier >= 1 && (
           <div className="absolute inset-0 flex items-center justify-center text-3xl sm:text-4xl md:text-5xl font-extrabold text-white pointer-events-none">
             {multiplier.toFixed(2)}x
           </div>
@@ -349,8 +400,8 @@ export default function CrashGame({ showControls = true }) {
           }`}
         >
           {result.type === "win"
-            ? `🎉 Congratulations! You won KES ${result.amount}`
-            : `💥 Oops! You lost KES ${result.amount}`}
+            ? `🎉 Congratulations! You won UGX ${result.amount}`
+            : `💥 Oops! You lost UGX ${result.amount}`}
         </div>
       )}
 
@@ -363,14 +414,14 @@ export default function CrashGame({ showControls = true }) {
               <div className="flex items-end gap-4 mx-auto flex-wrap sm:flex-nowrap justify-center">
                 {/* Bet Amount */}
                 <div className="flex flex-col">
-                  <label className="block text-xs">Bet Amount</label>
+                  <label className="block text-xs">Bet Amount (UGX)</label>
                   <input
                     type="number"
                     value={betAmount || ""}
                     onChange={(e) => setBetAmount(Number(e.target.value))}
                     className="border p-1 rounded w-28 sm:w-28 md:w-32 text-center text-black"
                     placeholder="Enter amount"
-                    min={10}
+                    min={100}
                   />
                 </div>
 
@@ -478,33 +529,43 @@ export default function CrashGame({ showControls = true }) {
       </div>
 
       {/* Live Users */}
-      <div className="w-full bg-gray-900 rounded p-2 mt-4 overflow-x-auto">
-        <h3 className="text-sm font-semibold mb-2">Live Users</h3>
-        <div className="min-w-[320px]">
-          <div className="grid grid-cols-4 text-xs font-bold border-b border-gray-700 pb-1 mb-1">
+      <div className="w-full bg-gray-900 rounded p-2">
+        <h3 className="text-sm font-bold mb-2">Live Users</h3>
+        <div className="space-y-1">
+          <div className="grid grid-cols-4 text-xs border-b border-gray-800 pb-1 font-bold">
             <span>User</span>
             <span>Bet</span>
-            <span>Multiplier</span>
+            <span>Cashout</span>
             <span>Profit</span>
           </div>
-          {liveUsers.map((u, i) => (
+          {liveUsers.map((u, idx) => (
             <div
-              key={i}
+              key={idx}
               className="grid grid-cols-4 text-xs border-b border-gray-800 py-0.5"
             >
               <span className="truncate max-w-[80px]">{u.user}</span>
-              <span className="truncate max-w-[80px]">
-                {u.amount === "-" ? "-" : `KES ${u.amount}`}
+              <span>
+                {u.amount === "-" ? "-" : `UGX ${u.amount.toLocaleString()}`}
               </span>
-              <span className="truncate max-w-[60px]">{u.multiplier}</span>
+              <span>
+                {u.cashedOut
+                  ? `${typeof u.multiplier === "number"
+                      ? u.multiplier.toFixed(2)
+                      : u.multiplier}x`
+                  : "-"}
+              </span>
               <span
                 className={
-                  u.profit === "-" || u.profit === "0"
-                    ? "text-red-500 font-bold truncate max-w-[80px]"
-                    : "text-green-500 font-bold truncate max-w-[80px]"
+                  u.profit && u.profit !== "-" && u.profit > 0
+                    ? "text-green-400"
+                    : u.profit && u.profit !== "-" && u.profit < 0
+                    ? "text-red-400"
+                    : "text-gray-300"
                 }
               >
-                {u.profit}
+                {u.profit === "-"
+                  ? "-"
+                  : `UGX ${Number(u.profit).toLocaleString()}`}
               </span>
             </div>
           ))}
@@ -512,4 +573,4 @@ export default function CrashGame({ showControls = true }) {
       </div>
     </div>
   );
-}   
+}
