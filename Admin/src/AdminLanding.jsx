@@ -9,16 +9,24 @@ const AdminLanding = () => {
 
   const handleLogin = async () => {
     try {
-      const allowedEmails = ["example1@gmail.com", "example2@gmail.com"];
-      const correctPassword = "kenya1";
+      const res = await fetch("https://crash-game-sse3.onrender.com/admins/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (allowedEmails.includes(email) && password === correctPassword) {
-        localStorage.setItem("adminAuthToken", "dummy-token");
-        setIsLoggedIn(true);
-        navigate("/admin/dashboard");
-      } else {
-        throw new Error("Invalid credentials! Please try again.");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Invalid credentials! Please try again.");
       }
+
+      // store token returned from server
+      localStorage.setItem("adminAuthToken", data.token);
+      setIsLoggedIn(true);
+      navigate("/admin/dashboard");
     } catch (error) {
       alert(error.message || "Login failed");
     }

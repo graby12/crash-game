@@ -17,6 +17,7 @@ const registerRoutes = require("./routes/register");
 const gamesRoutes = require("./routes/games");
 const generateCrashMultiplier = require("./routes/random");
 const adminRoutes = require("./routes/admin");
+const { router: adminsRoutes, verifyAdmin } = require("./routes/admins");
 
 const app = express();
 const server = http.createServer(app);
@@ -64,12 +65,18 @@ mongoose
 // ---------- Mount Routes ----------
 app.use("/api/register", registerRoutes);
 app.use("/api/bet", gamesRoutes);
-app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminRoutes); // legacy admin
+app.use("/admins", adminsRoutes); // JWT admin
+
+// Example protected route for admins
+app.get("/admins/secret", verifyAdmin, (req, res) => {
+  res.json({ message: `Hello ${req.admin.email}, welcome to the admin area!` });
+});
 
 // ---------- Phone Helpers (Airtel Uganda) ----------
 function formatPhoneForAirtel(phone) {
   phone = phone.toString().trim();
-  if (phone.startsWith("0")) return "256" + phone.substring(1); // 070.. → 25670..
+  if (phone.startsWith("0")) return "256" + phone.substring(1);
   if (phone.startsWith("+256")) return phone.substring(1);
   if (phone.startsWith("256")) return phone;
   return phone;
@@ -267,19 +274,41 @@ let gameState = {
   history: [],
 };
 
+// --- Namespaces ---
+io.on("connection", (socket) => {
+  console.log("Player connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Player disconnected:", socket.id);
+  });
+});
+
+// Admin namespace
+const adminNamespace = io.of("/admin");
+adminNamespace.on("connection", (socket) => {
+  console.log("Admin connected:", socket.id);
+  socket.join("admins");
+
+  socket.on("disconnect", () => {
+    console.log("Admin disconnected:", socket.id);
+  });
+});
+
+// --- Game Logic ---
 function startCountdown() {
   gameState.status = "countdown";
   gameState.countdown = 5.0;
 
-  // ✅ Generate crash point at start of countdown (instead of inside startRound)
+  // ✅ Generate crash point at start of countdown
   gameState.crashPoint = generateCrashMultiplier();
 
-  // ✅ Send early preview to admins only
-  io.to("admins").emit("upcomingCrashResult", {
+  // ✅ Send early preview only to admins
+  adminNamespace.to("admins").emit("upcomingCrashResult", {
     crashPoint: gameState.crashPoint.toFixed(2),
     timestamp: new Date(),
   });
 
+  // Normal users see countdown only
   io.emit("countdown", gameState.countdown);
 
   const countdownInterval = setInterval(() => {
@@ -295,14 +324,10 @@ function startCountdown() {
 
 function startRound() {
   gameState.status = "running";
-
-  // ❌ remove crashPoint generation here (already done in countdown)
-  // gameState.crashPoint = generateCrashMultiplier();
-
   gameState.multiplier = 1;
   gameState.startTime = Date.now();
 
-  // ✅ Users still only learn crashPoint now
+  // ✅ Users only learn crashPoint now
   io.emit("roundStarted", { crashPoint: gameState.crashPoint });
 
   const growthRate = 0.18;
@@ -318,7 +343,14 @@ function startRound() {
       gameState.history.unshift(`${gameState.crashPoint.toFixed(2)}x`);
       gameState.history = gameState.history.slice(0, 20);
 
+      // ✅ Send to all users
       io.emit("roundEnded", {
+        crashPoint: gameState.crashPoint.toFixed(2),
+        history: gameState.history,
+      });
+
+      // ✅ Also send to admins
+      adminNamespace.to("admins").emit("roundEnded", {
         crashPoint: gameState.crashPoint.toFixed(2),
         history: gameState.history,
       });
@@ -336,7 +368,6 @@ function startRound() {
 }
 
 startCountdown();
-
 
 // ---------- Start Server ----------
 const PORT = process.env.PORT;
