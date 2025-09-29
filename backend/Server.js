@@ -16,6 +16,7 @@ const Bet = require("./models/Bet");
 const registerRoutes = require("./routes/register");
 const gamesRoutes = require("./routes/games");
 const generateCrashMultiplier = require("./routes/random");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 const server = http.createServer(app);
@@ -63,6 +64,7 @@ mongoose
 // ---------- Mount Routes ----------
 app.use("/api/register", registerRoutes);
 app.use("/api/bet", gamesRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ---------- Phone Helpers (Airtel Uganda) ----------
 function formatPhoneForAirtel(phone) {

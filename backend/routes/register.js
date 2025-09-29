@@ -22,7 +22,9 @@ router.post("/", async (req, res) => {
   }
 
   if (username.length < 5) {
-    return res.status(400).json({ error: "Username must be at least 5 characters long" });
+    return res
+      .status(400)
+      .json({ error: "Username must be at least 5 characters long" });
   }
 
   const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
@@ -35,7 +37,9 @@ router.post("/", async (req, res) => {
   try {
     const normalizedPhone = normalizePhone(phoneNumber);
 
-    const existingUser = await Register.findOne({ phoneNumber: normalizedPhone });
+    const existingUser = await Register.findOne({
+      phoneNumber: normalizedPhone,
+    });
     if (existingUser) {
       return res.status(400).json({ error: "Phone number already registered" });
     }
@@ -64,12 +68,16 @@ router.post("/login", async (req, res) => {
 
     const user = await Register.findOne({ phoneNumber: normalizedPhone });
     if (!user) {
-      return res.status(400).json({ error: "Invalid phone number or password" });
+      return res
+        .status(400)
+        .json({ error: "Invalid phone number or password" });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ error: "Invalid phone number or password" });
+      return res
+        .status(400)
+        .json({ error: "Invalid phone number or password" });
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {

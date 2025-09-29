@@ -127,6 +127,9 @@ const Homepage = () => {
 
   // ----------------- DEPOSIT FUNCTION -----------------
   const handleDeposit = () => setIsDepositPopupOpen(true);
+
+  // ❌ Old confirmDeposit (STK Push) — hashed out for future use
+  /*
   const confirmDeposit = async () => {
     if (!depositPhone.match(/^(?:2547\d{8}|07\d{8})$/)) { setErrorMessage("Invalid phone number format. Use 07XXXXXXXX or 2547XXXXXXXX"); return; }
     if (parseFloat(depositAmount) < 50) { setErrorMessage("Minimum deposit is KES 50"); return; }
@@ -155,6 +158,13 @@ const Homepage = () => {
       setIsDepositProcessing(false);
     }
   };
+  */
+
+  // ✅ New confirmDeposit for Airtel instructions
+  const confirmDeposit = () => {
+    setSuccessMessage("Deposit instructions completed, waiting for confirmation...");
+    setIsDepositPopupOpen(false);
+  };
 
   // ----------------- CLOSE POPUPS -----------------
   const closePopup = () => setIsPopupOpen(false);
@@ -178,7 +188,7 @@ const Homepage = () => {
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 flex-1 justify-center sm:justify-end text-sm sm:text-base">
             <span className="bg-gray-600 px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-center">
-              KSH {availableBalance}
+              UGX {availableBalance}
             </span>
             <span className="hidden sm:block">KKK5249201</span>
             <button
@@ -202,7 +212,7 @@ const Homepage = () => {
           {/* ✅ Balance + Deposit only */}
           <div className="flex flex-row items-center space-x-2 absolute left-1/2 transform -translate-x-1/2">
             <span className="px-3 py-1 bg-gray-700 rounded-md text-white font-semibold">
-              KSH {availableBalance}
+              UGX {availableBalance}
             </span>
             <button
               onClick={handleDeposit}
@@ -251,7 +261,7 @@ const Homepage = () => {
       {/* Footer */}
       <footer className="bg-orange-500 text-center py-2 sm:py-4 mt-6">
         <p className="text-white text-sm sm:text-base">SPECIAL HAPPY HOUR DEAL!</p>
-        <p className="text-white text-xs sm:text-sm">PATA 10% YA LOSSES ZAKO ALL WEEK BETWEEN 8AM - 10AM</p>
+        <p className="text-white text-xs sm:text-sm">GET 10% OF YOUR LOSSES ALL WEEK BETWEEN 8AM - 10AM</p>
       </footer>
 
       {/* Withdraw Popup */}
@@ -297,29 +307,24 @@ const Homepage = () => {
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-gray-800 p-6 rounded-lg w-11/12 sm:w-2/3 md:w-1/3 space-y-4">
             <h3 className="text-xl sm:text-2xl font-semibold text-center">Deposit Funds</h3>
-            <div className="space-y-4">
-              <div className="flex flex-col">
-                <label>Phone Number</label>
-                <input type="text" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
-                  value={depositPhone} onChange={(e) => setDepositPhone(e.target.value)} placeholder="Enter phone number (07XXXXXXXX)" />
-              </div>
-              <div className="flex flex-col">
-                <label>Amount (KES)</label>
-                <input type="number" className="p-2 rounded bg-gray-800 text-white w-full border border-gray-500"
-                  value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="Enter deposit amount" />
-                {depositAmount < 50 && depositAmount !== '' && (
-                  <p className="text-red-500 text-sm">Minimum deposit is KES 50</p>
-                )}
-              </div>
+            <div className="space-y-2 text-sm sm:text-base">
+              <p>Follow the steps below to deposit via Airtel Money:</p>
+              <ol className="list-decimal list-inside space-y-1 text-left">
+                <li>Dial <strong>*185*9#</strong></li>
+                <li>Enter Merchant ID – <strong>6888198</strong></li>
+                <li>Enter Amount – (Minimum 50,000 UGX)</li>
+                <li>Reference Number – (Your Name or Your Phone Number)</li>
+                <li>Enter Your 4-Digit Airtel Money PIN</li>
+              </ol>
+             <p className="mt-2 text-yellow-400 text-xs">
+                 Note: Your account balance will be updated automatically after confirmation. 
+              </p> 
             </div>
             {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
             {successMessage && <p className="text-green-500 text-sm">{successMessage}</p>}
             <div className="flex justify-between mt-4 space-x-2">
               <button onClick={closeDepositPopup} className="bg-red-600 py-2 px-4 rounded-lg w-1/2">CLOSE</button>
-              <button onClick={confirmDeposit} disabled={isDepositProcessing}
-                className={`bg-blue-600 py-2 px-4 rounded-lg w-1/2 ${isDepositProcessing ? "opacity-50 cursor-not-allowed" : ""}`}>
-                {isDepositProcessing ? "Processing..." : "DEPOSIT"}
-              </button>
+              <button onClick={confirmDeposit} className="bg-blue-600 py-2 px-4 rounded-lg w-1/2">DONE</button>
             </div>
           </div>
         </div>
@@ -331,7 +336,7 @@ const Homepage = () => {
   );
 };
 
-// 🔥 Transaction messages component
+// Transaction messages
 // Transaction messages
 const TransactionMessages = () => {
   const [message, setMessage] = useState("");
@@ -423,7 +428,5 @@ const TransactionMessages = () => {
     </div>
   );
 };
-
-
 
 export default Homepage;
