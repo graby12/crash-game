@@ -10,11 +10,12 @@ const AdminDashboard = () => {
   const [totalUsers, setTotalUsers] = useState(0);
   const [dailyNewUsers, setDailyNewUsers] = useState(0);
   const [allUsers, setAllUsers] = useState([]);
-  const [viewMode, setViewMode] = useState("today"); // ✅ toggle between today / all
+  const [viewMode, setViewMode] = useState("today");
 
   // 🔹 Crash game states
   const [crashResults, setCrashResults] = useState([]);
   const [upcomingCrash, setUpcomingCrash] = useState(null);
+  const [resultsViewMode, setResultsViewMode] = useState("10min");
 
   const navigate = useNavigate();
 
@@ -36,12 +37,10 @@ const AdminDashboard = () => {
           throw new Error(`Failed to fetch users API: ${res.status}`);
         }
         const data = await res.json();
-        console.log("Fetched /api/admin data:", data);
 
         setAllUsers(data);
         setTotalUsers(data.length);
 
-        // ✅ Uganda/Kenya timezone (EAT, UTC+3)
         const todayLocal = new Date().toLocaleDateString("en-CA", {
           timeZone: "Africa/Kampala",
         });
@@ -70,23 +69,35 @@ const AdminDashboard = () => {
       transports: ["websocket"],
     });
 
-    // Upcoming crash point (before round starts)
     socket.on("upcomingCrashResult", (data) => {
       setUpcomingCrash(data.crashPoint);
     });
 
-    // Round ended
     socket.on("roundEnded", (data) => {
-      setCrashResults((prev) => [
-        {
-          multiplier: data.crashPoint + "x",
-          time: new Date().toLocaleString("en-GB", {
-            timeZone: "Africa/Kampala",
-          }),
-        },
-        ...prev,
-      ]);
-      setUpcomingCrash(null); // reset preview after round ends
+      const now = new Date();
+
+      setCrashResults((prev) => {
+        const updated = [
+          {
+            multiplier: data.crashPoint + "x",
+            time: now.toLocaleString("en-GB", {
+              timeZone: "Africa/Kampala",
+            }),
+            date: now.toLocaleDateString("en-GB", {
+              timeZone: "Africa/Kampala",
+            }),
+            localTime: now.toLocaleTimeString("en-GB", {
+              timeZone: "Africa/Kampala",
+            }),
+            timestamp: now.getTime(),
+          },
+          ...prev,
+        ];
+
+        return updated.slice(0, 10);
+      });
+
+      setUpcomingCrash(null);
     });
 
     return () => {
@@ -111,6 +122,14 @@ const AdminDashboard = () => {
 
     return userDate === todayLocal;
   });
+
+  // ✅ filter crash results depending on resultsViewMode
+  const displayedResults =
+    resultsViewMode === "all"
+      ? crashResults
+      : crashResults.filter(
+          (result) => Date.now() - result.timestamp <= 10 * 60 * 1000
+        );
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -303,26 +322,63 @@ const AdminDashboard = () => {
 
               {/* Upcoming crash preview */}
               {upcomingCrash && (
-                <div className="mb-4 p-3 bg-yellow-100 border-l-4 border-yellow-500">
-                  Upcoming Crash Point:{" "}
-                  <b>{parseFloat(upcomingCrash).toFixed(2)}x</b>
+                <div className="mb-6 p-6 bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 text-white rounded-xl shadow-lg text-center">
+                  <h4 className="text-xl font-semibold">
+                    🚀 Upcoming Crash Point
+                  </h4>
+                  <p className="text-4xl md:text-5xl font-extrabold mt-2">
+                    {parseFloat(upcomingCrash).toFixed(2)}x
+                  </p>
                 </div>
               )}
 
-              {/* Past results */}
-              <ul className="space-y-2">
-                {crashResults.map((result, idx) => (
-                  <li
-                    key={idx}
-                    className="p-3 bg-white shadow rounded flex flex-col sm:flex-row sm:justify-between"
-                  >
-                    <span>Multiplier: {result.multiplier}</span>
-                    <span className="text-gray-600 text-sm sm:text-base">
-                      {result.time}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {/* Toggle results view */}
+              <div className="flex space-x-2 mt-2 mb-4">
+                <button
+                  onClick={() => setResultsViewMode("10min")}
+                  className={`px-4 py-2 rounded ${
+                    resultsViewMode === "10min"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-200 hover:bg-gray-300"
+                  }`}
+                >
+                  Last 10 Minutes
+                </button>
+                <button
+                  onClick={() => setResultsViewMode("all")}
+                  className={`px-4 py-2 rounded ${
+                    resultsViewMode === "all"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-200 hover:bg-gray-300"
+                  }`}
+                >
+                  All Results
+                </button>
+              </div>
+
+              {/* Past results table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border rounded shadow">
+                  <thead className="bg-gray-200 text-gray-700">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Multiplier</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedResults.map((result, idx) => (
+                      <tr key={idx} className="border-b last:border-0">
+                        <td className="px-4 py-2 font-semibold text-blue-600">
+                          {result.multiplier}
+                        </td>
+                        <td className="px-4 py-2">{result.date}</td>
+                        <td className="px-4 py-2">{result.localTime}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
