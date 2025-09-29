@@ -270,6 +270,16 @@ let gameState = {
 function startCountdown() {
   gameState.status = "countdown";
   gameState.countdown = 5.0;
+
+  // ✅ Generate crash point at start of countdown (instead of inside startRound)
+  gameState.crashPoint = generateCrashMultiplier();
+
+  // ✅ Send early preview to admins only
+  io.to("admins").emit("upcomingCrashResult", {
+    crashPoint: gameState.crashPoint.toFixed(2),
+    timestamp: new Date(),
+  });
+
   io.emit("countdown", gameState.countdown);
 
   const countdownInterval = setInterval(() => {
@@ -285,11 +295,16 @@ function startCountdown() {
 
 function startRound() {
   gameState.status = "running";
-  gameState.crashPoint = generateCrashMultiplier();
+
+  // ❌ remove crashPoint generation here (already done in countdown)
+  // gameState.crashPoint = generateCrashMultiplier();
+
   gameState.multiplier = 1;
   gameState.startTime = Date.now();
 
+  // ✅ Users still only learn crashPoint now
   io.emit("roundStarted", { crashPoint: gameState.crashPoint });
+
   const growthRate = 0.18;
 
   const loop = () => {
@@ -319,7 +334,9 @@ function startRound() {
 
   loop();
 }
+
 startCountdown();
+
 
 // ---------- Start Server ----------
 const PORT = process.env.PORT;

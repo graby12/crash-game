@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaUserCircle, FaSignOutAlt, FaBars } from "react-icons/fa";
+import { io } from "socket.io-client";
 
 const AdminDashboard = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -9,6 +10,12 @@ const AdminDashboard = () => {
   const [totalUsers, setTotalUsers] = useState(0);
   const [dailyNewUsers, setDailyNewUsers] = useState(0);
   const [allUsers, setAllUsers] = useState([]);
+  const [viewMode, setViewMode] = useState("today"); // ✅ toggle between today / all
+
+  // 🔹 Crash game states
+  const [crashResults, setCrashResults] = useState([]);
+  const [upcomingCrash, setUpcomingCrash] = useState(null);
+
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -16,13 +23,9 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
-  const crashResults = [
-    { id: 1, multiplier: "2.4x", time: "2025-09-28 14:30" },
-    { id: 2, multiplier: "1.7x", time: "2025-09-28 14:35" },
-    { id: 3, multiplier: "5.2x", time: "2025-09-28 14:40" },
-  ];
   const totalBalance = 53200;
 
+  // 🔹 Fetch users once
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -40,7 +43,7 @@ const AdminDashboard = () => {
 
         // ✅ Uganda/Kenya timezone (EAT, UTC+3)
         const todayLocal = new Date().toLocaleDateString("en-CA", {
-          timeZone: "Africa/Kampala", // same as Nairobi
+          timeZone: "Africa/Kampala",
         });
 
         const newToday = data.filter((user) => {
@@ -60,6 +63,54 @@ const AdminDashboard = () => {
 
     fetchUsers();
   }, []);
+
+  // 🔹 Real-time crash game events
+  useEffect(() => {
+    const socket = io("https://crash-game-sse3.onrender.com/admin", {
+      transports: ["websocket"],
+    });
+
+    // Upcoming crash point (before round starts)
+    socket.on("upcomingCrashResult", (data) => {
+      setUpcomingCrash(data.crashPoint);
+    });
+
+    // Round ended
+    socket.on("roundEnded", (data) => {
+      setCrashResults((prev) => [
+        {
+          multiplier: data.crashPoint + "x",
+          time: new Date().toLocaleString("en-GB", {
+            timeZone: "Africa/Kampala",
+          }),
+        },
+        ...prev,
+      ]);
+      setUpcomingCrash(null); // reset preview after round ends
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // ✅ filter users depending on view mode
+  const displayedUsers = allUsers.filter((user) => {
+    if (viewMode === "all") return true;
+
+    const timestamp = user.createdAt || user.date || user.registeredAt;
+    if (!timestamp) return false;
+
+    const todayLocal = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Africa/Kampala",
+    });
+
+    const userDate = new Date(timestamp).toLocaleDateString("en-CA", {
+      timeZone: "Africa/Kampala",
+    });
+
+    return userDate === todayLocal;
+  });
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -169,35 +220,77 @@ const AdminDashboard = () => {
                 <span className="font-semibold">{dailyNewUsers}</span>
               </p>
 
-              {/* Users List */}
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Recent Users</h4>
-                <ul className="space-y-1 max-h-60 overflow-y-auto bg-white p-2 rounded shadow">
-                  {allUsers.slice(0, 10).map((user, idx) => {
-                    const ts =
-                      user.createdAt ||
-                      user.date ||
-                      user.registeredAt ||
-                      "Unknown date";
-                    return (
-                      <li
-                        key={idx}
-                        className="text-sm border-b last:border-0 py-1"
-                      >
-                        <span className="font-medium">
-                          {user.username || "Unknown"}
-                        </span>{" "}
-                        — {user.phoneNumber || "No phone"} — Balance:{" "}
-                        <span className="text-green-600 font-semibold">
-                          {user.balance ?? 0}
-                        </span>{" "}
-                        — {new Date(ts).toLocaleString("en-GB", {
-                          timeZone: "Africa/Kampala",
-                        })}
-                      </li>
-                    );
-                  })}
-                </ul>
+              {/* Toggle buttons */}
+              <div className="flex space-x-2 mt-4 mb-4">
+                <button
+                  onClick={() => setViewMode("today")}
+                  className={`px-4 py-2 rounded ${
+                    viewMode === "today"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-200 hover:bg-gray-300"
+                  }`}
+                >
+                  Today’s Users
+                </button>
+                <button
+                  onClick={() => setViewMode("all")}
+                  className={`px-4 py-2 rounded ${
+                    viewMode === "all"
+                      ? "bg-orange-500 text-white"
+                      : "bg-gray-200 hover:bg-gray-300"
+                  }`}
+                >
+                  All Users
+                </button>
+              </div>
+
+              {/* Users Table */}
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full bg-white border rounded shadow">
+                  <thead className="bg-gray-200 text-gray-700">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Username</th>
+                      <th className="px-4 py-2 text-left">Phone Number</th>
+                      <th className="px-4 py-2 text-left">Balance</th>
+                      <th className="px-4 py-2 text-left">Date Joined</th>
+                      <th className="px-4 py-2 text-left">Time Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedUsers.map((user, idx) => {
+                      const ts =
+                        user.createdAt ||
+                        user.date ||
+                        user.registeredAt ||
+                        new Date();
+
+                      const localDate = new Date(ts).toLocaleDateString(
+                        "en-GB",
+                        { timeZone: "Africa/Kampala" }
+                      );
+                      const localTime = new Date(ts).toLocaleTimeString(
+                        "en-GB",
+                        { timeZone: "Africa/Kampala" }
+                      );
+
+                      return (
+                        <tr key={idx} className="border-b last:border-0">
+                          <td className="px-4 py-2">
+                            {user.username || "Unknown"}
+                          </td>
+                          <td className="px-4 py-2">
+                            {user.phoneNumber || "N/A"}
+                          </td>
+                          <td className="px-4 py-2 text-green-600 font-semibold">
+                            {user.balance ?? 0}
+                          </td>
+                          <td className="px-4 py-2">{localDate}</td>
+                          <td className="px-4 py-2">{localTime}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -207,10 +300,20 @@ const AdminDashboard = () => {
               <h3 className="text-lg md:text-xl font-bold mb-4">
                 Crash Game Results
               </h3>
+
+              {/* Upcoming crash preview */}
+              {upcomingCrash && (
+                <div className="mb-4 p-3 bg-yellow-100 border-l-4 border-yellow-500">
+                  Upcoming Crash Point:{" "}
+                  <b>{parseFloat(upcomingCrash).toFixed(2)}x</b>
+                </div>
+              )}
+
+              {/* Past results */}
               <ul className="space-y-2">
-                {crashResults.map((result) => (
+                {crashResults.map((result, idx) => (
                   <li
-                    key={result.id}
+                    key={idx}
                     className="p-3 bg-white shadow rounded flex flex-col sm:flex-row sm:justify-between"
                   >
                     <span>Multiplier: {result.multiplier}</span>
