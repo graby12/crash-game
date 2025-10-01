@@ -44,74 +44,99 @@ const App = () => {
     };
   }, []);
 
-  // LOGIN
-  const handleLogin = async () => {
-    setError("");
-    setSuccess("");
-    const userData = { phoneNumber, password };
-    try {
-      const response = await fetch(
-        "https://crash-game-sse3.onrender.com/api/register/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(userData),
-        }
-      );
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem("token", data.token);
-        setSuccess("Logged in successfully");
-        handleCloseModal();
-        navigate("/home");
-      } else {
-        setError(data.error || "Login failed");
-      }
-    } catch {
-      setError("Something went wrong. Please try again later.");
-    }
-  };
+ // LOGIN
+const handleLogin = async () => {
+  setError("");
+  setSuccess("");
+  const userData = { phoneNumber, password };
 
-  // REGISTER (no OTP)
-  const handleRegister = async () => {
-    setError("");
-    setSuccess("");
-    if (username.length < 5) {
-      setError("Username must be at least 5 characters long");
-      return;
-    }
-    if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/.test(password)) {
-      setError("Password must be 6+ chars with letters & numbers");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    const userData = { username, phoneNumber, password };
-    try {
-      const response = await fetch(
-        "https://crash-game-sse3.onrender.com/api/register",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(userData),
-        }
-      );
-      const data = await response.json();
-      if (response.ok) {
-        setSuccess("Registration successful! You can now log in.");
-        setIsLogin(true);
-        setPassword("");
-        setConfirmPassword("");
-      } else {
-        setError(data.error || "Registration failed");
+  try {
+    const response = await fetch(
+      "https://crash-game-sse3.onrender.com/api/register/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
       }
-    } catch {
-      setError("Something went wrong. Please try again later.");
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // ✅ Save token
+      localStorage.setItem("token", data.token);
+
+      // ✅ Save user details
+      localStorage.setItem("userId", data.user.id);
+      localStorage.setItem("username", data.user.username);
+      localStorage.setItem("phoneNumber", data.user.phoneNumber);
+      localStorage.setItem("balance", data.user.balance);
+      localStorage.setItem("userCode", data.user.userCode); // unique MGxxxx
+
+      setSuccess("Logged in successfully");
+      handleCloseModal();
+      navigate("/home");
+    } else {
+      setError(data.error || "Login failed");
     }
-  };
+  } catch {
+    setError("Something went wrong. Please try again later.");
+  }
+};
+
+// REGISTER (no OTP)
+const handleRegister = async () => {
+  setError("");
+  setSuccess("");
+
+  if (username.length < 5) {
+    setError("Username must be at least 5 characters long");
+    return;
+  }
+  if (!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/.test(password)) {
+    setError("Password must be 6+ chars with letters & numbers");
+    return;
+  }
+  if (password !== confirmPassword) {
+    setError("Passwords do not match");
+    return;
+  }
+
+  const userData = { username, phoneNumber, password };
+
+  try {
+    const response = await fetch(
+      "https://crash-game-sse3.onrender.com/api/register",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      }
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      // If backend returns user with userCode, you can save it here:
+      if (data.user) {
+        localStorage.setItem("userId", data.user.id);
+        localStorage.setItem("username", data.user.username);
+        localStorage.setItem("phoneNumber", data.user.phoneNumber);
+        localStorage.setItem("balance", data.user.balance);
+        localStorage.setItem("userCode", data.user.userCode);
+      }
+
+      setSuccess("Registration successful! You can now log in.");
+      setIsLogin(true);
+      setPassword("");
+      setConfirmPassword("");
+    } else {
+      setError(data.error || "Registration failed");
+    }
+  } catch {
+    setError("Something went wrong. Please try again later.");
+  }
+};
 
   // Modal control
   const handleOpenModal = (loginMode) => {

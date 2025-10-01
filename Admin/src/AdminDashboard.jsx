@@ -342,7 +342,7 @@ const AdminDashboard = () => {
                       : "bg-gray-200 hover:bg-gray-300"
                   }`}
                 >
-                  Last 10 Minutes
+                  Last 10 Crashpoints
                 </button>
                 <button
                   onClick={() => setResultsViewMode("all")}
