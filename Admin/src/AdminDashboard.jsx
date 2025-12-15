@@ -13,9 +13,10 @@ const AdminDashboard = () => {
   const [viewMode, setViewMode] = useState("today");
 
   // 🔹 Crash game states
-  const [crashResults, setCrashResults] = useState([]);
-  const [upcomingCrash, setUpcomingCrash] = useState(null);
-  const [resultsViewMode, setResultsViewMode] = useState("10min");
+  const [crashResults, setCrashResults] = useState([]); // last crashes
+  const [upcomingCrashQueue, setUpcomingCrashQueue] = useState([]); // next 9 in queue
+  const [upcomingCrash, setUpcomingCrash] = useState(null); // next crash
+  const [resultsViewMode, setResultsViewMode] = useState("last10");
 
   const navigate = useNavigate();
 
@@ -69,8 +70,11 @@ const AdminDashboard = () => {
       transports: ["websocket"],
     });
 
-    socket.on("upcomingCrashResult", (data) => {
-      setUpcomingCrash(data.crashPoint);
+    // Receive full upcoming queue
+    socket.on("upcomingCrashPoints", (data) => {
+      const [next, ...rest] = data.upcoming;
+      setUpcomingCrash(next); // main upcoming crash
+      setUpcomingCrashQueue(rest); // queue of remaining 9
     });
 
     socket.on("roundEnded", (data) => {
@@ -80,24 +84,19 @@ const AdminDashboard = () => {
         const updated = [
           {
             multiplier: data.crashPoint + "x",
-            time: now.toLocaleString("en-GB", {
-              timeZone: "Africa/Kampala",
-            }),
-            date: now.toLocaleDateString("en-GB", {
-              timeZone: "Africa/Kampala",
-            }),
-            localTime: now.toLocaleTimeString("en-GB", {
-              timeZone: "Africa/Kampala",
-            }),
+            time: now.toLocaleString("en-GB", { timeZone: "Africa/Kampala" }),
+            date: now.toLocaleDateString("en-GB", { timeZone: "Africa/Kampala" }),
+            localTime: now.toLocaleTimeString("en-GB", { timeZone: "Africa/Kampala" }),
             timestamp: now.getTime(),
           },
           ...prev,
         ];
 
-        return updated.slice(0, 10);
+        return updated.slice(0, 10); // keep last 10
       });
 
       setUpcomingCrash(null);
+      setUpcomingCrashQueue([]);
     });
 
     return () => {
@@ -127,9 +126,14 @@ const AdminDashboard = () => {
   const displayedResults =
     resultsViewMode === "all"
       ? crashResults
-      : crashResults.filter(
-          (result) => Date.now() - result.timestamp <= 10 * 60 * 1000
-        );
+      : [
+          ...(crashResults[0] ? [crashResults[0]] : []), // last crash
+          ...upcomingCrashQueue.map((cp) => ({
+            multiplier: parseFloat(cp).toFixed(2) + "x",
+            date: "-",
+            localTime: "-",
+          })),
+        ];
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -227,6 +231,7 @@ const AdminDashboard = () => {
         <div className="p-4 md:p-6 flex-grow bg-gray-100">
           {activeTab === "users" && (
             <div>
+              {/* Users content unchanged */}
               <h3 className="text-lg md:text-xl font-bold mb-4">
                 Users Overview
               </h3>
@@ -329,20 +334,31 @@ const AdminDashboard = () => {
                   <p className="text-4xl md:text-5xl font-extrabold mt-2">
                     {parseFloat(upcomingCrash).toFixed(2)}x
                   </p>
+
+                  {/* Queue display */}
+                  {upcomingCrashQueue.length > 0 && (
+                    <div className="mt-4 flex justify-center flex-wrap gap-2">
+                      {upcomingCrashQueue.map((cp, idx) => (
+                        <span key={idx} className="px-3 py-1 bg-white text-gray-800 rounded-lg font-medium shadow-sm">
+                          {parseFloat(cp).toFixed(2)}x
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Toggle results view */}
               <div className="flex space-x-2 mt-2 mb-4">
                 <button
-                  onClick={() => setResultsViewMode("10min")}
+                  onClick={() => setResultsViewMode("last10")}
                   className={`px-4 py-2 rounded ${
-                    resultsViewMode === "10min"
+                    resultsViewMode === "last10"
                       ? "bg-orange-500 text-white"
                       : "bg-gray-200 hover:bg-gray-300"
                   }`}
                 >
-                  Last 10 Crashpoints
+                  Upcoming 10 Crashpoints
                 </button>
                 <button
                   onClick={() => setResultsViewMode("all")}

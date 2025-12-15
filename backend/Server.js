@@ -295,16 +295,28 @@ adminNamespace.on("connection", (socket) => {
 });
 
 // --- Game Logic ---
+// Initialize a queue of upcoming crash points
+gameState.upcomingCrashPoints = [];
+
+function ensureUpcomingCrashPoints(count = 10) {
+  while (gameState.upcomingCrashPoints.length < count) {
+    gameState.upcomingCrashPoints.push(generateCrashMultiplier());
+  }
+}
+
 function startCountdown() {
   gameState.status = "countdown";
   gameState.countdown = 5.0;
 
-  // ✅ Generate crash point at start of countdown
-  gameState.crashPoint = generateCrashMultiplier();
+  // ✅ Ensure we have 10 upcoming crash points
+  ensureUpcomingCrashPoints(10);
 
-  // ✅ Send early preview only to admins
-  adminNamespace.to("admins").emit("upcomingCrashResult", {
-    crashPoint: gameState.crashPoint.toFixed(2),
+  // ✅ Pick the first crash point for this round
+  gameState.crashPoint = gameState.upcomingCrashPoints.shift();
+
+  // ✅ Send next 10 crash points to admins only
+  adminNamespace.to("admins").emit("upcomingCrashPoints", {
+    upcoming: gameState.upcomingCrashPoints.map((cp) => cp.toFixed(2)),
     timestamp: new Date(),
   });
 
@@ -355,6 +367,7 @@ function startRound() {
         history: gameState.history,
       });
 
+      // ✅ Start next countdown
       setTimeout(() => startCountdown(), 5000);
       return;
     }
@@ -367,6 +380,7 @@ function startRound() {
   loop();
 }
 
+// Start the first countdown
 startCountdown();
 
 // ---------- Start Server ----------
