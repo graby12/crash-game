@@ -312,7 +312,7 @@ const Homepage = () => {
               <ol className="list-decimal list-inside space-y-1 text-left">
                 <li>Dial <strong>*185*9#</strong></li>
                 <li>Enter Merchant ID – <strong>6888198</strong></li>
-                <li>Enter Amount – (Minimum 50,000 UGX)</li>
+                <li>Enter Amount – (Minimum 10,000 UGX)</li>
                 <li>Reference Number – (Your Name or Your Phone Number)</li>
                 <li>Enter Your 4-Digit Airtel Money PIN</li>
               </ol>
